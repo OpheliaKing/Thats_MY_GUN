@@ -12,11 +12,14 @@ namespace SHIN
         private static readonly int MoveXHash = Animator.StringToHash("MoveX");
         private static readonly int MoveYHash = Animator.StringToHash("MoveY");
         private static readonly int MoveAmountHash = Animator.StringToHash("MoveAmount");
+        private static readonly int DieHash = Animator.StringToHash("Die");
 
         private readonly CharacterStateMachine _stateMachine = new CharacterStateMachine();
 
         private Rigidbody _rigidbody;
         private Animator _animator;
+        private CharacterInfo _info;
+        private CharacterAppearance _appearance;
         private CharacterType _characterType = CharacterType.None;
         private Vector3 _moveDirection;
         private Vector2 _moveInput;
@@ -92,12 +95,58 @@ namespace SHIN
         }
 
         public CharacterType CharacterType => _characterType;
+        public CharacterInfo Info => _info;
 
-        public void InitCharacter(CharacterType characterType)
+        public void InitCharacter(CharacterType characterType, CharacterData data)
         {
             _characterType = characterType;
+            if (_info != null)
+                _info.Died -= OnDied;
+
+            _info = new CharacterInfo(data);
+            _info.Died += OnDied;
+            CacheAppearance();
             InitRigidbody();
-            ChangeState(CharacterStateId.Idle);
+            if (_info.IsDead)
+                OnDied();
+            else
+                ChangeState(CharacterStateId.Idle);
+        }
+
+        public void SetAppearance(CharacterPreset preset)
+        {
+            CacheAppearance();
+            if (_appearance == null)
+                return;
+
+            _appearance.Apply(preset);
+        }
+
+        public void SetAppearance(string headName, string bodyName)
+        {
+            CacheAppearance();
+            if (_appearance == null)
+                return;
+
+            _appearance.ApplyCustom(headName, bodyName);
+        }
+
+        private void CacheAppearance()
+        {
+            if (_appearance != null)
+                return;
+
+            _appearance = GetComponentInChildren<CharacterAppearance>(true);
+            if (_appearance == null)
+                Debug.LogWarning("[CharacterBase] CharacterAppearance가 없습니다.", this);
+        }
+
+        private void OnDied()
+        {
+            StopMoveVelocity();
+            ChangeState(CharacterStateId.Die);
+            if (_animator != null)
+                _animator.CrossFade(DieHash, 0.1f);
         }
 
         private void Update()
@@ -145,6 +194,9 @@ namespace SHIN
 
         private void OnDestroy()
         {
+            if (_info != null)
+                _info.Died -= OnDied;
+
             UnbindInput();
         }
 
@@ -228,7 +280,8 @@ namespace SHIN
             if (_hasMoveInput)
                 _moveDirection = ToCameraPlanarDirection(_moveInput);
 
-            _rigidbody.linearVelocity = _moveDirection * MoveSpeed;
+            var speed = _info != null ? _info.MoveSpeed : MoveSpeed;
+            _rigidbody.linearVelocity = _moveDirection * speed;
         }
 
         public void StopMoveVelocity()
