@@ -78,7 +78,7 @@ public class InGameManager : ManagerBase
             return;
         }
 
-        player.InitCharacter();
+        player.InitCharacter(CharacterType.Player);
         BindPlayerCamera(player);
         BindPlayerInput(player);
         MapTid = tid;

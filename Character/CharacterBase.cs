@@ -7,10 +7,12 @@ namespace SHIN
     public class CharacterBase : MonoBehaviour
     {
         private const float MoveSpeed = 5f;
+        private const float RotateSpeed = 1080f;
 
         private readonly CharacterStateMachine _stateMachine = new CharacterStateMachine();
 
         private Rigidbody _rigidbody;
+        private CharacterType _characterType = CharacterType.None;
         private Vector3 _moveDirection;
         private Vector2 _moveInput;
         private bool _hasMoveInput;
@@ -34,6 +36,34 @@ namespace SHIN
             body.constraints = RigidbodyConstraints.FreezeRotation;
             body.linearDamping = 0f;
             body.angularDamping = 0f;
+
+            var collider = GetComponent<CapsuleCollider>();
+            if (collider != null)
+                collider.sharedMaterial = SlideMaterial;
+        }
+
+        private static PhysicsMaterial _slideMaterial;
+
+        /// <summary>
+        /// 마찰을 없애 벽에 붙어도 옆 방향으로 미끄러지게 한다.
+        /// </summary>
+        private static PhysicsMaterial SlideMaterial
+        {
+            get
+            {
+                if (_slideMaterial != null)
+                    return _slideMaterial;
+
+                _slideMaterial = new PhysicsMaterial("CharacterSlide")
+                {
+                    dynamicFriction = 0f,
+                    staticFriction = 0f,
+                    bounciness = 0f,
+                    frictionCombine = PhysicsMaterialCombine.Minimum,
+                    bounceCombine = PhysicsMaterialCombine.Minimum
+                };
+                return _slideMaterial;
+            }
         }
 
         private void Awake()
@@ -52,8 +82,11 @@ namespace SHIN
                 Debug.LogWarning("[CharacterBase] Collider가 없습니다.", this);
         }
 
-        public void InitCharacter()
+        public CharacterType CharacterType => _characterType;
+
+        public void InitCharacter(CharacterType characterType)
         {
+            _characterType = characterType;
             InitRigidbody();
             ChangeState(CharacterStateId.Idle);
         }
@@ -66,6 +99,12 @@ namespace SHIN
         private void FixedUpdate()
         {
             _stateMachine.FixedUpdate();
+        }
+
+        private void LateUpdate()
+        {
+            if (_characterType == CharacterType.Player)
+                RotatePlayerTowardPointer();
         }
 
         /// <summary>
@@ -167,6 +206,62 @@ namespace SHIN
                 return;
 
             _rigidbody.linearVelocity = Vector3.zero;
+        }
+
+        /// <summary>
+        /// 수평 방향을 바라보게 돌린다. 길이와 높이는 쓰지 않고, RotateSpeed만큼만 회전한다.
+        /// </summary>
+        public void CharacterRotate(Vector3 direction)
+        {
+            if (_stateMachine.CurrentId == CharacterStateId.Die)
+                return;
+
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 0.0001f)
+                return;
+
+            var target = Quaternion.LookRotation(direction.normalized, Vector3.up);
+            var current = _rigidbody != null ? _rigidbody.rotation : transform.rotation;
+            var rotation = Quaternion.RotateTowards(current, target, RotateSpeed * Time.deltaTime);
+            if (_rigidbody != null)
+                _rigidbody.rotation = rotation;
+            else
+                transform.rotation = rotation;
+        }
+
+        /// <summary>
+        /// 월드 지점을 바라본다. 방향은 CharacterRotate로 넘긴다.
+        /// </summary>
+        public void CharacterRotateToLook(Vector3 worldPosition)
+        {
+            CharacterRotate(worldPosition - transform.position);
+        }
+
+        private void RotatePlayerTowardPointer()
+        {
+            if (_input == null || _stateMachine.CurrentId == CharacterStateId.Die)
+                return;
+
+            if (!TryGetPointerOnGround(_input.PointerPosition, out var point))
+                return;
+
+            CharacterRotateToLook(point);
+        }
+
+        private bool TryGetPointerOnGround(Vector2 screenPosition, out Vector3 point)
+        {
+            point = default;
+            var camera = Camera.main;
+            if (camera == null)
+                return false;
+
+            var ray = camera.ScreenPointToRay(screenPosition);
+            var ground = new Plane(Vector3.up, new Vector3(0f, transform.position.y, 0f));
+            if (!ground.Raycast(ray, out var distance))
+                return false;
+
+            point = ray.GetPoint(distance);
+            return true;
         }
 
         public void ChangeState(CharacterStateId id)
