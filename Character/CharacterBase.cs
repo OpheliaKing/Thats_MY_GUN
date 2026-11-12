@@ -2,6 +2,8 @@ using UnityEngine;
 
 namespace SHIN
 {
+    [RequireComponent(typeof(Rigidbody))]
+    [RequireComponent(typeof(CapsuleCollider))]
     public class CharacterBase : MonoBehaviour
     {
         private const float MoveSpeed = 5f;
@@ -10,6 +12,27 @@ namespace SHIN
 
         private Rigidbody _rigidbody;
         private Vector3 _moveDirection;
+        private InputManager _input;
+
+        private void Reset()
+        {
+            InitRigidbody();
+        }
+
+        private void InitRigidbody()
+        {
+            Rigidbody body = GetComponent<Rigidbody>();
+            if (body == null)
+                return;
+
+            body.isKinematic = false;
+            body.useGravity = false;
+            body.interpolation = RigidbodyInterpolation.Interpolate;
+            body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+            body.linearDamping = 0f;
+            body.angularDamping = 0f;
+        }
 
         private void Awake()
         {
@@ -29,6 +52,7 @@ namespace SHIN
 
         private void InitCharacter()
         {
+            InitRigidbody();
             ChangeState(CharacterStateId.Idle);
         }
 
@@ -40,6 +64,39 @@ namespace SHIN
         private void FixedUpdate()
         {
             _stateMachine.FixedUpdate();
+        }
+
+        /// <summary>
+        /// 이 인스턴스만 플레이어 입력을 받는다. 스폰한 플레이어에게만 호출한다.
+        /// </summary>
+        public void BindInput(InputManager input)
+        {
+            UnbindInput();
+            if (input == null)
+                return;
+
+            _input = input;
+            _input.MoveChanged += OnMoveInput;
+            OnMoveInput(_input.Move);
+        }
+
+        public void UnbindInput()
+        {
+            if (_input == null)
+                return;
+
+            _input.MoveChanged -= OnMoveInput;
+            _input = null;
+        }
+
+        private void OnDestroy()
+        {
+            UnbindInput();
+        }
+
+        private void OnMoveInput(Vector2 move)
+        {
+            SetMoveDirection(new Vector3(move.x, 0f, move.y));
         }
 
         /// <summary>
