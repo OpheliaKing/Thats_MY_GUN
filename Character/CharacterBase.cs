@@ -12,6 +12,8 @@ namespace SHIN
 
         private Rigidbody _rigidbody;
         private Vector3 _moveDirection;
+        private Vector2 _moveInput;
+        private bool _hasMoveInput;
         private InputManager _input;
 
         private void Reset()
@@ -50,7 +52,7 @@ namespace SHIN
                 Debug.LogWarning("[CharacterBase] Collider가 없습니다.", this);
         }
 
-        private void InitCharacter()
+        public void InitCharacter()
         {
             InitRigidbody();
             ChangeState(CharacterStateId.Idle);
@@ -87,6 +89,8 @@ namespace SHIN
 
             _input.MoveChanged -= OnMoveInput;
             _input = null;
+            _hasMoveInput = false;
+            _moveInput = Vector2.zero;
         }
 
         private void OnDestroy()
@@ -96,7 +100,32 @@ namespace SHIN
 
         private void OnMoveInput(Vector2 move)
         {
-            SetMoveDirection(new Vector3(move.x, 0f, move.y));
+            _moveInput = move;
+            _hasMoveInput = true;
+            SetMoveDirection(ToCameraPlanarDirection(move));
+        }
+
+        /// <summary>
+        /// 스틱 입력을 카메라의 수평 앞·오른쪽으로 돌린다.
+        /// 카메라가 없으면 월드 XZ를 쓴다.
+        /// </summary>
+        private static Vector3 ToCameraPlanarDirection(Vector2 move)
+        {
+            if (move.sqrMagnitude < 0.0001f)
+                return Vector3.zero;
+
+            var planar = new Vector3(move.x, 0f, move.y);
+            var camera = Camera.main;
+            if (camera == null)
+                return planar.normalized;
+
+            var yaw = Quaternion.Euler(0f, camera.transform.eulerAngles.y, 0f);
+            var direction = yaw * planar;
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 0.0001f)
+                return Vector3.zero;
+
+            return direction.normalized;
         }
 
         /// <summary>
@@ -124,6 +153,9 @@ namespace SHIN
         {
             if (_rigidbody == null || _rigidbody.isKinematic)
                 return;
+
+            if (_hasMoveInput)
+                _moveDirection = ToCameraPlanarDirection(_moveInput);
 
             _rigidbody.linearVelocity = _moveDirection * MoveSpeed;
         }

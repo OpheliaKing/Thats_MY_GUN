@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using SHIN;
 using UnityEngine;
 
 /// <summary>
@@ -7,11 +8,19 @@ using UnityEngine;
 public class InGameManager : ManagerBase
 {
     private const string RaidScope = "raid";
+    private const string MapCatalogAddress = "Assets/Addressable/SO/MapSO.asset";
+    private const string CharacterCatalogAddress = "Assets/Addressable/SO/CharacterData.asset";
+    private const string PlayerTid = "char_player_001";
 
-    public int MapTid { get; private set; }
+    private MapSO _maps;
+    private CharacterDataSO _characters;
+    private CharacterBase _player;
+    private PlayerCamera _playerCamera;
+
+    public string MapTid { get; private set; }
     public bool IsRunning { get; private set; }
 
-    public async Task EnterAsync(int mapTid)
+    public async Task StartGameAsync()
     {
         if (IsRunning)
         {
@@ -26,16 +35,63 @@ public class InGameManager : ManagerBase
             return;
         }
 
-        IsRunning = true;
-        MapTid = mapTid;
+        var maps = await GetMapsAsync(resources);
+        if (maps == null || !maps.TryGetRandom(out var tid, out var map) || string.IsNullOrEmpty(map.PrefabAddress))
+        {
+            Debug.LogError("[InGameManager] 불러올 맵이 없습니다.");
+            return;
+        }
+
+        var characters = await GetCharactersAsync(resources);
+        if (characters == null || !characters.TryGetByTid(PlayerTid, out var playerData) || string.IsNullOrEmpty(playerData.PrefabAddress))
+        {
+            Debug.LogError("[InGameManager] 플레이어 데이터가 없습니다.");
+            return;
+        }
+
         resources.BeginScope(RaidScope);
-        await LoadMapAsync(mapTid);
+        var instance = await resources.InstantiateAsync(map.PrefabAddress, startInactive: false);
+        if (instance == null)
+        {
+            resources.ReleaseScope(RaidScope);
+            Debug.LogError($"[InGameManager] 맵 생성 실패. tid={tid}");
+            return;
+        }
+
+        // ===== 플레이어 스폰 위치 =====
+        // 지금은 원점. 나중에 맵의 스폰 지점으로 교체한다.
+        var playerSpawnPosition = Vector3.zero;
+
+        var playerObject = await resources.InstantiateAsync(playerData.PrefabAddress, startInactive: false, worldPosition: playerSpawnPosition);
+        if (playerObject == null)
+        {
+            resources.ReleaseScope(RaidScope);
+            Debug.LogError("[InGameManager] 플레이어 생성 실패.");
+            return;
+        }
+
+        var player = playerObject.GetComponent<CharacterBase>();
+        if (player == null)
+        {
+            resources.ReleaseScope(RaidScope);
+            Debug.LogError("[InGameManager] 플레이어에 CharacterBase가 없습니다.");
+            return;
+        }
+
+        player.InitCharacter();
+        BindPlayerCamera(player);
+        BindPlayerInput(player);
+        MapTid = tid;
+        IsRunning = true;
     }
 
     public void Exit()
     {
         if (!IsRunning)
             return;
+
+        BindPlayerInput(null);
+        BindPlayerCamera(null);
 
         if (GameManager.Instance != null && GameManager.Instance.ResourceManager != null)
             GameManager.Instance.ResourceManager.ReleaseScope(RaidScope);
@@ -44,11 +100,80 @@ public class InGameManager : ManagerBase
     }
 
     /// <summary>
-    /// tid로 맵을 올린다. 맵 데이터는 아직 없다.
+    /// 스폰한 플레이어에게만 입력 콜백을 붙인다. 이전 플레이어는 구독을 해제한다.
     /// </summary>
-    private Task LoadMapAsync(int mapTid)
+    public void BindPlayerInput(CharacterBase player)
     {
-        Debug.Log($"[InGameManager] 맵 로드. tid={mapTid}. 맵 데이터가 없어 콘텐츠는 올리지 않습니다.");
-        return Task.CompletedTask;
+        if (_player != null)
+            _player.UnbindInput();
+
+        _player = player;
+        if (_player == null)
+            return;
+
+        var input = GameManager.Instance != null ? GameManager.Instance.InputManager : null;
+        if (input == null)
+        {
+            Debug.LogError("[InGameManager] InputManager가 없습니다.");
+            return;
+        }
+
+        _player.BindInput(input);
+    }
+
+    /// <summary>
+    /// 메인 카메라가 이 플레이어를 따라가게 한다. 판이 끝나면 대상을 비운다.
+    /// </summary>
+    private void BindPlayerCamera(CharacterBase player)
+    {
+        if (player == null)
+        {
+            if (_playerCamera != null)
+                _playerCamera.SetTarget(null);
+            return;
+        }
+
+        _playerCamera = EnsurePlayerCamera();
+        if (_playerCamera == null)
+            return;
+
+        _playerCamera.SetTarget(player.transform);
+    }
+
+    private PlayerCamera EnsurePlayerCamera()
+    {
+        if (_playerCamera != null)
+            return _playerCamera;
+
+        var camera = Camera.main;
+        if (camera == null)
+        {
+            Debug.LogError("[InGameManager] Main Camera가 없습니다.");
+            return null;
+        }
+
+        var playerCamera = camera.GetComponent<PlayerCamera>();
+        if (playerCamera == null)
+            playerCamera = camera.gameObject.AddComponent<PlayerCamera>();
+
+        return playerCamera;
+    }
+
+    private async Task<MapSO> GetMapsAsync(ResourceManager resources)
+    {
+        if (_maps != null)
+            return _maps;
+
+        _maps = await resources.LoadAsync<MapSO>(MapCatalogAddress);
+        return _maps;
+    }
+
+    private async Task<CharacterDataSO> GetCharactersAsync(ResourceManager resources)
+    {
+        if (_characters != null)
+            return _characters;
+
+        _characters = await resources.LoadAsync<CharacterDataSO>(CharacterCatalogAddress);
+        return _characters;
     }
 }

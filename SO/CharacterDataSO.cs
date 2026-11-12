@@ -4,9 +4,9 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "CharacterData", menuName = "CityGun/Character Data")]
 public class CharacterDataSO : ScriptableObject
 {
-    [SerializeField] private SerializedDictionary<int, CharacterData> _characters = new();
+    [SerializeField] private SerializedDictionary<string, CharacterData> _characters = new();
 
-    public CharacterData GetByTid(int tid)
+    public CharacterData GetByTid(string tid)
     {
         if (TryGetByTid(tid, out var data))
             return data;
@@ -15,7 +15,7 @@ public class CharacterDataSO : ScriptableObject
         return null;
     }
 
-    public bool TryGetByTid(int tid, out CharacterData data)
+    public bool TryGetByTid(string tid, out CharacterData data)
     {
         return _characters.TryGetValue(tid, out data);
     }

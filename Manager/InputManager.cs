@@ -11,7 +11,7 @@ public class InputManager : ManagerBase
         UI
     }
 
-    private const string ControlsAddress = "GameControls";
+    private const string ControlsAddress = "Assets/Addressable/Input/GameControls.inputactions";
 
     private ResourceManager _resourceManager;
     private InputActionAsset _controls;
