@@ -6,6 +6,7 @@ public class GameManager : Singleton<GameManager>
     private const string BootLabel = "boot";
 
     private ResourceManager _resourceManager;
+    private InGameManager _inGameManager;
 
     public ResourceManager ResourceManager
     {
@@ -13,6 +14,15 @@ public class GameManager : Singleton<GameManager>
         {
             ManagerBase.EnsureManager(transform, ref _resourceManager);
             return _resourceManager;
+        }
+    }
+
+    public InGameManager InGameManager
+    {
+        get
+        {
+            ManagerBase.EnsureManager(transform, ref _inGameManager);
+            return _inGameManager;
         }
     }
 
@@ -30,5 +40,20 @@ public class GameManager : Singleton<GameManager>
         }
 
         await resourceManager.PreloadLabelAsync(BootLabel);
+    }
+
+    /// <summary>
+    /// 인게임 시작 신호. 맵 tid를 인게임 매니저에 넘긴다.
+    /// </summary>
+    public Task StartGameAsync(int mapTid)
+    {
+        var inGameManager = InGameManager;
+        if (inGameManager == null)
+        {
+            Debug.LogError("[GameManager] InGameManager가 없습니다.");
+            return Task.CompletedTask;
+        }
+
+        return inGameManager.EnterAsync(mapTid);
     }
 }
