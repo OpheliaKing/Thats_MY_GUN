@@ -9,9 +9,14 @@ namespace SHIN
         private const float MoveSpeed = 5f;
         private const float RotateSpeed = 1080f;
 
+        private static readonly int MoveXHash = Animator.StringToHash("MoveX");
+        private static readonly int MoveYHash = Animator.StringToHash("MoveY");
+        private static readonly int MoveAmountHash = Animator.StringToHash("MoveAmount");
+
         private readonly CharacterStateMachine _stateMachine = new CharacterStateMachine();
 
         private Rigidbody _rigidbody;
+        private Animator _animator;
         private CharacterType _characterType = CharacterType.None;
         private Vector3 _moveDirection;
         private Vector2 _moveInput;
@@ -80,6 +85,10 @@ namespace SHIN
 
             if (GetComponentInChildren<Collider>() == null)
                 Debug.LogWarning("[CharacterBase] Collider가 없습니다.", this);
+
+            _animator = GetComponentInChildren<Animator>(true);
+            if (_animator == null)
+                Debug.LogWarning("[CharacterBase] Animator가 없습니다.", this);
         }
 
         public CharacterType CharacterType => _characterType;
@@ -94,6 +103,7 @@ namespace SHIN
         private void Update()
         {
             _stateMachine.Update();
+            ApplyMoveBlend();
         }
 
         private void FixedUpdate()
@@ -130,6 +140,7 @@ namespace SHIN
             _input = null;
             _hasMoveInput = false;
             _moveInput = Vector2.zero;
+            ApplyMoveBlend();
         }
 
         private void OnDestroy()
@@ -150,21 +161,42 @@ namespace SHIN
         /// </summary>
         private static Vector3 ToCameraPlanarDirection(Vector2 move)
         {
-            if (move.sqrMagnitude < 0.0001f)
-                return Vector3.zero;
-
-            var planar = new Vector3(move.x, 0f, move.y);
-            var camera = Camera.main;
-            if (camera == null)
-                return planar.normalized;
-
-            var yaw = Quaternion.Euler(0f, camera.transform.eulerAngles.y, 0f);
-            var direction = yaw * planar;
-            direction.y = 0f;
+            var direction = ToCameraPlanarVector(move);
             if (direction.sqrMagnitude < 0.0001f)
                 return Vector3.zero;
 
             return direction.normalized;
+        }
+
+        private static Vector3 ToCameraPlanarVector(Vector2 move)
+        {
+            var planar = new Vector3(move.x, 0f, move.y);
+            var camera = Camera.main;
+            if (camera == null)
+                return planar;
+
+            var yaw = Quaternion.Euler(0f, camera.transform.eulerAngles.y, 0f);
+            var direction = yaw * planar;
+            direction.y = 0f;
+            return direction;
+        }
+
+        /// <summary>
+        /// 이동 입력을 캐릭터의 오른쪽(MoveX), 앞(MoveY)으로 넣어 블렌드한다.
+        /// </summary>
+        private void ApplyMoveBlend()
+        {
+            if (_animator == null)
+                return;
+
+            var move = _hasMoveInput ? _moveInput : Vector2.zero;
+            if (move.sqrMagnitude > 1f)
+                move.Normalize();
+
+            var local = transform.InverseTransformDirection(ToCameraPlanarVector(move));
+            _animator.SetFloat(MoveXHash, local.x);
+            _animator.SetFloat(MoveYHash, local.z);
+            _animator.SetFloat(MoveAmountHash, new Vector2(local.x, local.z).magnitude);
         }
 
         /// <summary>
