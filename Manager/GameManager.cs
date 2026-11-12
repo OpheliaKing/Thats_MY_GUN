@@ -2,7 +2,7 @@ using System.Threading.Tasks;
 using SHIN;
 using UnityEngine;
 
-public class GameManager : MonoBehaviour
+public class GameManager : Singleton<GameManager>
 {
     private const string BootLabel = "boot";
 
