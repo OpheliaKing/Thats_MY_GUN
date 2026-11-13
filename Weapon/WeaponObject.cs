@@ -10,6 +10,7 @@ public class WeaponObject : MonoBehaviour
     [SerializeField] private Transform _bulletSpawnPoint;
     [SerializeField] private Transform _fireEffectPoint;
     [SerializeField] private string _fireEffectAddress;
+    [SerializeField] private string _fireSeAddress;
     [SerializeField] private CameraShakePreset _shakePreset = CameraShakePreset.Rifle;
     [SerializeField] private CameraShakeSettings _shakeCustom = new CameraShakeSettings();
 
@@ -20,6 +21,7 @@ public class WeaponObject : MonoBehaviour
     public Transform BulletSpawnPoint => _bulletSpawnPoint != null ? _bulletSpawnPoint : transform;
     public Transform FireEffectPoint => _fireEffectPoint != null ? _fireEffectPoint : transform;
     public string FireEffectAddress => _fireEffectAddress;
+    public string FireSeAddress => _fireSeAddress;
     public WeaponInfo Info => _info;
 
     public void Bind(WeaponInfo info, Transform owner, ProjectilePool pool)
@@ -68,7 +70,17 @@ public class WeaponObject : MonoBehaviour
         Debug.Log($"[WeaponObject] 가상 발사. 발사함. 남은 탄약={_info.Ammo}/{MaxMagazine}", this);
         FireProjectile();
         SpawnFireEffect();
+        PlayFireSe();
         ShakeCamera();
+    }
+
+    private void PlayFireSe()
+    {
+        if (string.IsNullOrEmpty(_fireSeAddress))
+            return;
+
+        var sound = GameManager.Instance != null ? GameManager.Instance.SoundManager : null;
+        sound?.Play(SoundType.Se, _fireSeAddress);
     }
 
     private void ShakeCamera()

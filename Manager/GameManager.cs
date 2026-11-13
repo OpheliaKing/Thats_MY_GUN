@@ -6,6 +6,7 @@ public class GameManager : Singleton<GameManager>
     private ResourceManager _resourceManager;
     private InputManager _inputManager;
     private InGameManager _inGameManager;
+    private SoundManager _soundManager;
 
     public ResourceManager ResourceManager
     {
@@ -31,6 +32,15 @@ public class GameManager : Singleton<GameManager>
         {
             ManagerBase.EnsureManager(transform, ref _inGameManager);
             return _inGameManager;
+        }
+    }
+
+    public SoundManager SoundManager
+    {
+        get
+        {
+            ManagerBase.EnsureManager(transform, ref _soundManager);
+            return _soundManager;
         }
     }
 
