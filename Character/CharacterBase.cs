@@ -9,6 +9,10 @@ namespace SHIN
         private const float MoveSpeed = 5f;
         private const float RotateSpeed = 1080f;
 
+        private const string TopLayerName = "Top";
+        private const string WalkSeAddress = "Assets/Addressable/Sound/SE/Walk/se_walk_001.ogg";
+        private const float WalkStepDistance = 2f;
+
         private static readonly int MoveXHash = Animator.StringToHash("MoveX");
         private static readonly int MoveYHash = Animator.StringToHash("MoveY");
         private static readonly int MoveAmountHash = Animator.StringToHash("MoveAmount");
@@ -25,6 +29,8 @@ namespace SHIN
         private Vector2 _moveInput;
         private bool _hasMoveInput;
         private InputManager _input;
+        private int _topLayerIndex = -1;
+        private float _walkStepTimer;
 
         private void Reset()
         {
@@ -156,6 +162,8 @@ namespace SHIN
         {
             _stateMachine.Update();
             ApplyMoveBlend();
+            ApplyShootLayer();
+            PlayWalkStep();
         }
 
         private void FixedUpdate()
@@ -254,6 +262,43 @@ namespace SHIN
             _animator.SetFloat(MoveXHash, local.x);
             _animator.SetFloat(MoveYHash, local.z);
             _animator.SetFloat(MoveAmountHash, new Vector2(local.x, local.z).magnitude);
+        }
+
+        /// <summary>
+        /// 사격 중에는 상체 레이어만 켜서 하체 이동은 그대로 둔다.
+        /// </summary>
+        private void ApplyShootLayer()
+        {
+            if (_animator == null)
+                return;
+
+            if (_topLayerIndex < 0)
+            {
+                _topLayerIndex = _animator.GetLayerIndex(TopLayerName);
+                if (_topLayerIndex < 0)
+                    return;
+            }
+
+            var shooting = _isFireHeld && _stateMachine.CurrentId != CharacterStateId.Die;
+            _animator.SetLayerWeight(_topLayerIndex, shooting ? 1f : 0f);
+        }
+
+        private void PlayWalkStep()
+        {
+            if (_stateMachine.CurrentId != CharacterStateId.Move)
+            {
+                _walkStepTimer = 0f;
+                return;
+            }
+
+            _walkStepTimer -= Time.deltaTime;
+            if (_walkStepTimer > 0f)
+                return;
+
+            var speed = _info != null ? _info.MoveSpeed : MoveSpeed;
+            _walkStepTimer = speed > 0.01f ? WalkStepDistance / speed : WalkStepDistance;
+            var sound = GameManager.Instance != null ? GameManager.Instance.SoundManager : null;
+            sound?.Play(SoundType.Se, WalkSeAddress);
         }
 
         /// <summary>
