@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// 캐릭터의 현재 스탯이다. 설계값인 CharacterData로 시작하고, 증감하면 콜백을 알린다.
 /// </summary>
-public class CharacterInfo
+public partial class CharacterInfo
 {
     private readonly CharacterData _characterData;
 

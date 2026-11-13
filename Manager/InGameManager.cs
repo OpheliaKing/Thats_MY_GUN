@@ -10,10 +10,14 @@ public class InGameManager : ManagerBase
     private const string RaidScope = "raid";
     private const string MapCatalogAddress = "Assets/Addressable/SO/MapSO.asset";
     private const string CharacterCatalogAddress = "Assets/Addressable/SO/CharacterData.asset";
+    private const string WeaponCatalogAddress = "Assets/Addressable/SO/WeaponSO.asset";
     private const string PlayerTid = "char_player_001";
+    private const string TempStartWeaponTid = "weapon_assault_rifle_001";
 
     private MapSO _maps;
     private CharacterDataSO _characters;
+    private WeaponSO _weapons;
+    private ProjectilePool _projectilePool;
     private CharacterBase _player;
     private PlayerCamera _playerCamera;
 
@@ -50,10 +54,12 @@ public class InGameManager : ManagerBase
         }
 
         resources.BeginScope(RaidScope);
+        _projectilePool?.Clear();
+        _projectilePool = new ProjectilePool(transform, resources);
         var instance = await resources.InstantiateAsync(map.PrefabAddress, startInactive: false);
         if (instance == null)
         {
-            resources.ReleaseScope(RaidScope);
+            EndRaid(resources);
             Debug.LogError($"[InGameManager] 맵 생성 실패. tid={tid}");
             return;
         }
@@ -65,7 +71,7 @@ public class InGameManager : ManagerBase
         var playerObject = await resources.InstantiateAsync(playerData.PrefabAddress, startInactive: false, worldPosition: playerSpawnPosition);
         if (playerObject == null)
         {
-            resources.ReleaseScope(RaidScope);
+            EndRaid(resources);
             Debug.LogError("[InGameManager] 플레이어 생성 실패.");
             return;
         }
@@ -73,12 +79,13 @@ public class InGameManager : ManagerBase
         var player = playerObject.GetComponent<CharacterBase>();
         if (player == null)
         {
-            resources.ReleaseScope(RaidScope);
+            EndRaid(resources);
             Debug.LogError("[InGameManager] 플레이어에 CharacterBase가 없습니다.");
             return;
         }
 
         player.InitCharacter(CharacterType.Player, playerData);
+        await GiveTempStartWeaponAsync(player, resources);
         player.SetAppearance(CharacterPreset.Default);
         BindPlayerCamera(player);
         BindPlayerInput(player);
@@ -94,10 +101,16 @@ public class InGameManager : ManagerBase
         BindPlayerInput(null);
         BindPlayerCamera(null);
 
-        if (GameManager.Instance != null && GameManager.Instance.ResourceManager != null)
-            GameManager.Instance.ResourceManager.ReleaseScope(RaidScope);
+        EndRaid(GameManager.Instance != null ? GameManager.Instance.ResourceManager : null);
 
         IsRunning = false;
+    }
+
+    private void EndRaid(ResourceManager resources)
+    {
+        _projectilePool?.Clear();
+        _projectilePool = null;
+        resources?.ReleaseScope(RaidScope);
     }
 
     /// <summary>
@@ -176,5 +189,48 @@ public class InGameManager : ManagerBase
 
         _characters = await resources.LoadAsync<CharacterDataSO>(CharacterCatalogAddress);
         return _characters;
+    }
+
+    private async Task<WeaponSO> GetWeaponsAsync(ResourceManager resources)
+    {
+        if (_weapons != null)
+            return _weapons;
+
+        _weapons = await resources.LoadAsync<WeaponSO>(WeaponCatalogAddress);
+        return _weapons;
+    }
+
+    /// <summary>
+    /// 임시. 캐릭터를 처음 만들 때 돌격소총을 쥐여 준다.
+    /// </summary>
+    private async Task GiveTempStartWeaponAsync(CharacterBase player, ResourceManager resources)
+    {
+        if (player == null || player.Info == null)
+            return;
+
+        var weapons = await GetWeaponsAsync(resources);
+        var item = new ItemInfo(TempStartWeaponTid, ItemType.Weapon);
+        if (!TryGetItemData(weapons, item, out var weaponData))
+        {
+            Debug.LogError($"[InGameManager] 임시 무기를 찾지 못했습니다. tid={TempStartWeaponTid}");
+            return;
+        }
+
+        await player.AcquireItem(item, resources, _projectilePool, weaponData);
+    }
+
+    private static bool TryGetItemData(WeaponSO weapons, ItemInfo item, out WeaponData weaponData)
+    {
+        weaponData = null;
+        if (item == null)
+            return false;
+
+        switch (item.Type)
+        {
+            case ItemType.Weapon:
+                return weapons != null && weapons.TryGetByTid(item.Tid, out weaponData);
+            default:
+                return false;
+        }
     }
 }

@@ -4,7 +4,7 @@ namespace SHIN
 {
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(CapsuleCollider))]
-    public class CharacterBase : MonoBehaviour
+    public partial class CharacterBase : MonoBehaviour
     {
         private const float MoveSpeed = 5f;
         private const float RotateSpeed = 1080f;
@@ -105,6 +105,9 @@ namespace SHIN
 
             _info = new CharacterInfo(data);
             _info.Died += OnDied;
+            var unitLayer = LayerMask.NameToLayer("Unit");
+            if (unitLayer >= 0)
+                gameObject.layer = unitLayer;
             CacheAppearance();
             InitRigidbody();
             if (_info.IsDead)
@@ -177,6 +180,7 @@ namespace SHIN
 
             _input = input;
             _input.MoveChanged += OnMoveInput;
+            BindFireInput();
             OnMoveInput(_input.Move);
         }
 
@@ -186,6 +190,7 @@ namespace SHIN
                 return;
 
             _input.MoveChanged -= OnMoveInput;
+            UnbindFireInput();
             _input = null;
             _hasMoveInput = false;
             _moveInput = Vector2.zero;
