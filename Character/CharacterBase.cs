@@ -113,6 +113,7 @@ namespace SHIN
                 gameObject.layer = unitLayer;
             CacheAppearance();
             InitRigidbody();
+            ResetDeathDissolve();
             if (_info.IsDead)
                 OnDied();
             else
@@ -126,6 +127,7 @@ namespace SHIN
                 return;
 
             _appearance.Apply(preset);
+            PrepareEnemyDeathDissolve();
         }
 
         public void SetAppearance(string headName, string bodyName)
@@ -135,6 +137,7 @@ namespace SHIN
                 return;
 
             _appearance.ApplyCustom(headName, bodyName);
+            PrepareEnemyDeathDissolve();
         }
 
         private void CacheAppearance()
@@ -153,6 +156,7 @@ namespace SHIN
             ChangeState(CharacterStateId.Die);
             if (_animator != null)
                 _animator.CrossFade(DieHash, 0.1f);
+            PlayEnemyDeathDissolve();
         }
 
         private void Update()
@@ -208,6 +212,7 @@ namespace SHIN
                 _info.Died -= OnDied;
 
             UnbindInput();
+            ReleaseEnemyDeathDissolve();
         }
 
         private void OnMoveInput(Vector2 move)
