@@ -17,6 +17,7 @@ namespace SHIN
 
             var source = result.Attacker != null ? result.Attacker.name : string.Empty;
             _info.AddHp(-result.Received);
+            PlayHitFlash();
             Debug.Log($"[CharacterBase] 피해를 받음. damage={result.Received}, source={source}, hp={_info.Hp}/{_info.MaxHp}", this);
         }
     }

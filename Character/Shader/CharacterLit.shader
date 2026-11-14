@@ -18,6 +18,8 @@ Shader "SHIN/CharacterLit"
         _DissolveSpan("Dissolve Span", Float) = 1
         _DissolveEdge("Edge Width", Range(0.001, 0.2)) = 0.05
         [HDR] _DissolveColor("Edge Color", Color) = (4, 0.8, 0.08, 1)
+        _Hit("Hit", Range(0, 1)) = 0
+        _HitColor("Hit Color", Color) = (1, 0.16, 0.12, 1)
     }
 
     SubShader
@@ -72,6 +74,8 @@ Shader "SHIN/CharacterLit"
                 half _DissolveSpan;
                 half _DissolveEdge;
                 half4 _DissolveColor;
+                half _Hit;
+                half4 _HitColor;
             CBUFFER_END
 
             struct Attributes
@@ -175,11 +179,12 @@ Shader "SHIN/CharacterLit"
                 inputData.shadowMask = half4(1, 1, 1, 1);
 
                 SurfaceData surface = (SurfaceData)0;
-                surface.albedo = albedo.rgb;
+                half hit = saturate(_Hit) * 0.65;
+                surface.albedo = lerp(albedo.rgb, albedo.rgb * _HitColor.rgb, hit);
                 surface.metallic = metal.r;
                 surface.smoothness = metal.a * _Smoothness;
                 surface.occlusion = lerp(1, occlusionSample, _OcclusionStrength);
-                surface.emission = emission + _DissolveColor.rgb * edge;
+                surface.emission = emission + _DissolveColor.rgb * edge + _HitColor.rgb * hit;
                 surface.alpha = 1;
                 surface.normalTS = normalTS;
 
@@ -219,6 +224,8 @@ Shader "SHIN/CharacterLit"
                 half _DissolveSpan;
                 half _DissolveEdge;
                 half4 _DissolveColor;
+                half _Hit;
+                half4 _HitColor;
             CBUFFER_END
 
             struct Attributes

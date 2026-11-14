@@ -114,6 +114,7 @@ namespace SHIN
             CacheAppearance();
             InitRigidbody();
             ResetDeathDissolve();
+            ResetHitFlash();
             if (_info.IsDead)
                 OnDied();
             else
@@ -164,6 +165,7 @@ namespace SHIN
             _stateMachine.Update();
             ApplyMoveBlend();
             ApplyShootLayer();
+            UpdateHitLayer();
             PlayWalkStep();
         }
 
@@ -213,6 +215,7 @@ namespace SHIN
 
             UnbindInput();
             ReleaseEnemyDeathDissolve();
+            ResetHitFlash();
         }
 
         private void OnMoveInput(Vector2 move)
