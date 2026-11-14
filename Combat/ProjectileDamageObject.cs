@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using SHIN;
 using UnityEngine;
 
 /// <summary>
@@ -115,7 +116,22 @@ public class ProjectileDamageObject : DamageObject
                 return true;
             }
 
-            Debug.Log($"[Projectile] 명중. target={hit.collider.name}, damage={_damage}, point={hit.point}", this);
+            var victim = hit.collider.GetComponentInParent<CharacterBase>();
+            if (victim == null)
+            {
+                Debug.Log($"[Projectile] 유닛이 아닌 대상. target={hit.collider.name}", this);
+                SpawnHitEffect(hit.point, hit.normal);
+                DestroySelf();
+                return true;
+            }
+
+            var attacker = _owner != null ? _owner.GetComponentInParent<CharacterBase>() : null;
+            var ingame = GameManager.Instance != null ? GameManager.Instance.InGameManager : null;
+            if (ingame == null)
+                Debug.LogError("[Projectile] InGameManager가 없습니다.", this);
+            else
+                ingame.Combat.JudgeHit(attacker, victim, _damage);
+
             SpawnHitEffect(hit.point, hit.normal);
             DestroySelf();
             return true;

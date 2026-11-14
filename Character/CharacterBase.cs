@@ -43,10 +43,10 @@ namespace SHIN
             if (body == null)
                 return;
 
-            body.isKinematic = false;
+            body.isKinematic = true;
             body.useGravity = false;
             body.interpolation = RigidbodyInterpolation.Interpolate;
-            body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             body.constraints = RigidbodyConstraints.FreezeRotation;
             body.linearDamping = 0f;
             body.angularDamping = 0f;
@@ -88,9 +88,6 @@ namespace SHIN
                 Debug.LogError("[CharacterBase] Rigidbody가 없습니다.", this);
                 return;
             }
-
-            if (_rigidbody.isKinematic)
-                Debug.LogWarning("[CharacterBase] Kinematic Rigidbody는 속도로 이동하지 않습니다. Is Kinematic을 끄세요.", this);
 
             if (GetComponentInChildren<Collider>() == null)
                 Debug.LogWarning("[CharacterBase] Collider가 없습니다.", this);
@@ -324,23 +321,83 @@ namespace SHIN
 
         public void ApplyMoveVelocity()
         {
-            if (_rigidbody == null || _rigidbody.isKinematic)
+            if (_rigidbody == null)
                 return;
 
             if (_hasMoveInput)
                 _moveDirection = ToCameraPlanarDirection(_moveInput);
 
             var speed = _info != null ? _info.MoveSpeed : MoveSpeed;
-            _rigidbody.linearVelocity = _moveDirection * speed;
+            var delta = _moveDirection * (speed * Time.fixedDeltaTime);
+            delta.y = 0f;
+            if (delta.sqrMagnitude <= 0.000001f)
+                return;
+
+            _rigidbody.MovePosition(ResolveMove(delta));
+        }
+
+        /// <summary>
+        /// 키네마틱은 벽에 스스로 멈추지 않는다. 바닥은 지나치고, 벽과 다른 몸에는 막힌 뒤 면을 따라간다.
+        /// </summary>
+        private Vector3 ResolveMove(Vector3 delta)
+        {
+            const float skin = 0.03f;
+            var position = _rigidbody.position;
+            var distance = delta.magnitude;
+            var direction = delta / distance;
+            if (!TryGetBlock(direction, distance, out var hit))
+                return position + delta;
+
+            var travel = Mathf.Max(0f, hit.distance - skin);
+            position += direction * travel;
+
+            var remain = distance - travel;
+            if (remain <= 0.001f)
+                return position;
+
+            var slide = Vector3.ProjectOnPlane(delta, hit.normal);
+            slide.y = 0f;
+            if (slide.sqrMagnitude <= 0.000001f)
+                return position;
+
+            var slideDirection = slide.normalized;
+            if (!TryGetBlock(slideDirection, remain, out var slideHit))
+                return position + slideDirection * remain;
+
+            var slideTravel = Mathf.Max(0f, slideHit.distance - skin);
+            return position + slideDirection * slideTravel;
+        }
+
+        private bool TryGetBlock(Vector3 direction, float distance, out RaycastHit closest)
+        {
+            closest = default;
+            var hits = _rigidbody.SweepTestAll(direction, distance, QueryTriggerInteraction.Ignore);
+            var found = false;
+            var best = float.MaxValue;
+            for (var i = 0; i < hits.Length; i++)
+            {
+                if (hits[i].normal.y > 0.7f)
+                    continue;
+
+                if (hits[i].distance >= best)
+                    continue;
+
+                best = hits[i].distance;
+                closest = hits[i];
+                found = true;
+            }
+
+            return found;
         }
 
         public void StopMoveVelocity()
         {
             _moveDirection = Vector3.zero;
-            if (_rigidbody == null || _rigidbody.isKinematic)
+            if (_rigidbody == null)
                 return;
 
             _rigidbody.linearVelocity = Vector3.zero;
+            _rigidbody.angularVelocity = Vector3.zero;
         }
 
         /// <summary>

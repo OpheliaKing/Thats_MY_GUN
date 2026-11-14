@@ -117,6 +117,14 @@ public partial class ResourceManager : ManagerBase
             instance.transform.localPosition = Vector3.zero;
 
         instance.transform.localRotation = Quaternion.identity;
+        var body = instance.GetComponent<Rigidbody>();
+        if (body != null)
+        {
+            body.position = instance.transform.position;
+            body.rotation = instance.transform.rotation;
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+        }
         TrackInstance(instance, address);
         return instance;
     }

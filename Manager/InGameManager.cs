@@ -13,6 +13,7 @@ public class InGameManager : ManagerBase
     private const string WeaponCatalogAddress = "Assets/Addressable/SO/WeaponSO.asset";
     private const string PlayerTid = "char_player_001";
     private const string TempStartWeaponTid = "weapon_assault_rifle_001";
+    private static readonly Vector3 TempEnemyPosition = new Vector3(2f, 0f, 0f);
 
     private MapSO _maps;
     private CharacterDataSO _characters;
@@ -20,9 +21,11 @@ public class InGameManager : ManagerBase
     private ProjectilePool _projectilePool;
     private CharacterBase _player;
     private PlayerCamera _playerCamera;
+    private CombatManager _combat;
 
     public string MapTid { get; private set; }
     public bool IsRunning { get; private set; }
+    public CombatManager Combat => EnsureManager(ref _combat);
 
     public async Task StartGameAsync()
     {
@@ -87,6 +90,7 @@ public class InGameManager : ManagerBase
         player.InitCharacter(CharacterType.Player, playerData);
         await GiveTempStartWeaponAsync(player, resources);
         player.SetAppearance(CharacterPreset.Default);
+        await SpawnTempEnemyAsync(resources, playerData);
         BindPlayerCamera(player);
         BindPlayerInput(player);
         MapTid = tid;
@@ -198,6 +202,46 @@ public class InGameManager : ManagerBase
 
         _weapons = await resources.LoadAsync<WeaponSO>(WeaponCatalogAddress);
         return _weapons;
+    }
+
+    /// <summary>
+    /// 임시. 인게임 시작 시 (2, 0, 0)에 적을 한 명 만든다. 적 데이터가 없어서 플레이어 프리팹을 쓴다.
+    /// </summary>
+    private async Task SpawnTempEnemyAsync(ResourceManager resources, CharacterData data)
+    {
+        if (resources == null || data == null || string.IsNullOrEmpty(data.PrefabAddress))
+        {
+            Debug.LogError("[InGameManager] 임시 적을 만들 데이터가 없습니다.");
+            return;
+        }
+
+        var enemyObject = await resources.InstantiateAsync(data.PrefabAddress, startInactive: false, worldPosition: TempEnemyPosition);
+        if (enemyObject == null)
+        {
+            Debug.LogError("[InGameManager] 임시 적 생성 실패.");
+            return;
+        }
+
+        var enemy = enemyObject.GetComponent<CharacterBase>();
+        if (enemy == null)
+        {
+            Debug.LogError("[InGameManager] 임시 적에 CharacterBase가 없습니다.");
+            return;
+        }
+
+        enemy.InitCharacter(CharacterType.Enemy, data);
+        enemy.SetAppearance(CharacterPreset.Cowboy);
+        enemy.transform.SetPositionAndRotation(TempEnemyPosition, Quaternion.identity);
+        var body = enemy.GetComponent<Rigidbody>();
+        if (body != null)
+        {
+            body.position = TempEnemyPosition;
+            body.rotation = Quaternion.identity;
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+        }
+
+        Debug.Log($"[InGameManager] 임시 적 생성. pos={TempEnemyPosition}", enemy);
     }
 
     /// <summary>
