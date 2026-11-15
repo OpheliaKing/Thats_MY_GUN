@@ -13,6 +13,7 @@ public class InGameManager : ManagerBase
     private const string WeaponCatalogAddress = "Assets/Addressable/SO/WeaponSO.asset";
     private const string PlayerTid = "char_player_001";
     private const string TempStartWeaponTid = "weapon_assault_rifle_001";
+    private const string InventoryAddress = "Assets/Addressable/Prafab/UI/InGame/InventoryUI.prefab";
     private static readonly Vector3 TempEnemyPosition = new Vector3(2f, 0f, 0f);
 
     private MapSO _maps;
@@ -22,13 +23,27 @@ public class InGameManager : ManagerBase
     private CharacterBase _player;
     private PlayerCamera _playerCamera;
     private CombatManager _combat;
+    private UIBase _inventory;
+    private bool _inventoryBusy;
+    private bool _inventoryInputBound;
 
     public string MapTid { get; private set; }
     public bool IsRunning { get; private set; }
     public CombatManager Combat => EnsureManager(ref _combat);
 
+    private void OnEnable()
+    {
+        BindInventoryInput();
+    }
+
+    private void OnDisable()
+    {
+        UnbindInventoryInput();
+    }
+
     public async Task StartGameAsync()
     {
+        BindInventoryInput();
         if (IsRunning)
         {
             Debug.LogWarning("[InGameManager] 이미 인게임입니다.");
@@ -114,9 +129,86 @@ public class InGameManager : ManagerBase
     {
         _projectilePool?.Clear();
         _projectilePool = null;
+        _inventory = null;
         if (GameManager.Instance != null)
+        {
             GameManager.Instance.UIManager.CloseAll();
+            GameManager.Instance.InputManager.EnableMap(InputManager.Map.Player);
+        }
+
         resources?.ReleaseScope(RaidScope);
+    }
+
+    private void BindInventoryInput()
+    {
+        if (_inventoryInputBound || GameManager.Instance == null)
+            return;
+
+        GameManager.Instance.InputManager.InventoryPerformed += OnInventoryPerformed;
+        _inventoryInputBound = true;
+    }
+
+    private void UnbindInventoryInput()
+    {
+        if (!_inventoryInputBound || GameManager.Instance == null)
+            return;
+
+        GameManager.Instance.InputManager.InventoryPerformed -= OnInventoryPerformed;
+        _inventoryInputBound = false;
+    }
+
+    private async void OnInventoryPerformed()
+    {
+        if (!IsRunning || _inventoryBusy)
+            return;
+
+        if (_inventory != null)
+        {
+            CloseInventory();
+            return;
+        }
+
+        _inventoryBusy = true;
+        try
+        {
+            await OpenInventoryAsync();
+        }
+        finally
+        {
+            _inventoryBusy = false;
+        }
+    }
+
+    private async Task OpenInventoryAsync()
+    {
+        var ui = GameManager.Instance.UIManager;
+        var opened = await ui.Show(InventoryAddress, UIType.Common);
+        if (!IsRunning || opened == null)
+            return;
+
+        var view = opened.GetComponent<InventoryUI>();
+        if (view == null)
+            view = opened.gameObject.AddComponent<InventoryUI>();
+
+        view.CloseRequested -= CloseInventory;
+        view.CloseRequested += CloseInventory;
+        view.Bind(_player);
+        _inventory = opened;
+        GameManager.Instance.InputManager.EnableMap(InputManager.Map.UI);
+    }
+
+    private void CloseInventory()
+    {
+        if (_inventory == null)
+            return;
+
+        var view = _inventory.GetComponent<InventoryUI>();
+        if (view != null)
+            view.CloseRequested -= CloseInventory;
+
+        GameManager.Instance.UIManager.Close();
+        _inventory = null;
+        GameManager.Instance.InputManager.EnableMap(InputManager.Map.Player);
     }
 
     /// <summary>

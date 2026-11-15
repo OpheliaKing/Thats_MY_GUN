@@ -27,6 +27,8 @@ public class InputManager : ManagerBase
     private InputAction _uiClick;
     private InputAction _uiRightClick;
     private InputAction _uiCancel;
+    private InputAction _playerInventory;
+    private InputAction _uiInventory;
 
     public Map CurrentMap { get; private set; } = Map.Player;
 
@@ -48,6 +50,7 @@ public class InputManager : ManagerBase
     public event Action UIClickCanceled;
     public event Action UIRightClickStarted;
     public event Action UICancelStarted;
+    public event Action InventoryPerformed;
 
     private void Awake()
     {
@@ -96,6 +99,8 @@ public class InputManager : ManagerBase
         _uiClick = _uiMap.FindAction("Click", true);
         _uiRightClick = _uiMap.FindAction("RightClick", true);
         _uiCancel = _uiMap.FindAction("Cancel", true);
+        _playerInventory = _playerMap.FindAction("Inventory", true);
+        _uiInventory = _uiMap.FindAction("Inventory", true);
         _bound = true;
 
         if (isActiveAndEnabled)
@@ -126,6 +131,8 @@ public class InputManager : ManagerBase
         _uiClick.canceled += OnUIClickCanceled;
         _uiRightClick.started += OnUIRightClickStarted;
         _uiCancel.started += OnUICancelStarted;
+        _playerInventory.started += OnInventoryStarted;
+        _uiInventory.started += OnInventoryStarted;
 
         EnableMap(CurrentMap);
     }
@@ -154,6 +161,8 @@ public class InputManager : ManagerBase
         _uiClick.canceled -= OnUIClickCanceled;
         _uiRightClick.started -= OnUIRightClickStarted;
         _uiCancel.started -= OnUICancelStarted;
+        _playerInventory.started -= OnInventoryStarted;
+        _uiInventory.started -= OnInventoryStarted;
 
         _playerMap.Disable();
         _uiMap.Disable();
@@ -251,5 +260,10 @@ public class InputManager : ManagerBase
     private void OnUICancelStarted(InputAction.CallbackContext context)
     {
         UICancelStarted?.Invoke();
+    }
+
+    private void OnInventoryStarted(InputAction.CallbackContext context)
+    {
+        InventoryPerformed?.Invoke();
     }
 }

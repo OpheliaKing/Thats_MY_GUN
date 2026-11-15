@@ -31,7 +31,20 @@ public partial class CharacterInfo
         _inventory[item.Tid] = item;
     }
 
-    public void SetEquippedItem(ItemInfo item)
+    public void CollectItems(List<ItemInfo> result)
+    {
+        if (result == null)
+            return;
+
+        result.Clear();
+        foreach (var pair in _inventory)
+        {
+            if (pair.Value != null)
+                result.Add(pair.Value);
+        }
+    }
+
+     public void SetEquippedItem(ItemInfo item)
     {
         EquippedItem = item;
     }
