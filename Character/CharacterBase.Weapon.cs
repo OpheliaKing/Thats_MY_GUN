@@ -48,16 +48,27 @@ namespace SHIN
 
         private void OnFireInputStarted()
         {
-            _isFireHeld = true;
-            _equippedWeaponView?.SetFireSignal(true);
-            Debug.Log("[CharacterBase] 발사 입력 시작.", this);
+            SetFireHeld(true);
         }
 
         private void OnFireInputCanceled()
         {
-            _isFireHeld = false;
-            _equippedWeaponView?.SetFireSignal(false);
-            Debug.Log("[CharacterBase] 발사 입력 해제.", this);
+            SetFireHeld(false);
+        }
+
+        /// <summary>
+        /// 발사 신호만 켠다. 입력과 AI가 같은 길을 쓴다.
+        /// </summary>
+        public void SetFireHeld(bool held)
+        {
+            if (_info != null && _info.IsDead)
+                held = false;
+
+            if (_isFireHeld == held)
+                return;
+
+            _isFireHeld = held;
+            _equippedWeaponView?.SetFireSignal(held);
         }
 
         public async Task EquipWeapon(ItemInfo item, WeaponData weaponData, ResourceManager resources, ProjectilePool projectilePool)

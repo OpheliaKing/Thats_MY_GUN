@@ -154,6 +154,7 @@ namespace SHIN
 
         private void OnDied()
         {
+            SetFireHeld(false);
             StopMoveVelocity();
             ChangeState(CharacterStateId.Die);
             if (_animator != null)

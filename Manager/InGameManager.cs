@@ -105,7 +105,7 @@ public class InGameManager : ManagerBase
         player.InitCharacter(CharacterType.Player, playerData);
         await GiveTempStartWeaponAsync(player, resources);
         player.SetAppearance(CharacterPreset.Default);
-        await SpawnTempEnemyAsync(resources, playerData);
+        await SpawnTempEnemyAsync(resources, playerData, player);
         BindPlayerCamera(player);
         BindPlayerInput(player);
         MapTid = tid;
@@ -301,7 +301,7 @@ public class InGameManager : ManagerBase
     /// <summary>
     /// 임시. 인게임 시작 시 (2, 0, 0)에 적을 한 명 만든다. 적 데이터가 없어서 플레이어 프리팹을 쓴다.
     /// </summary>
-    private async Task SpawnTempEnemyAsync(ResourceManager resources, CharacterData data)
+    private async Task SpawnTempEnemyAsync(ResourceManager resources, CharacterData data, CharacterBase player)
     {
         if (resources == null || data == null || string.IsNullOrEmpty(data.PrefabAddress))
         {
@@ -334,6 +334,10 @@ public class InGameManager : ManagerBase
             body.linearVelocity = Vector3.zero;
             body.angularVelocity = Vector3.zero;
         }
+
+        var ai = enemy.gameObject.AddComponent<EnemyAI>();
+        ai.Bind(enemy, player);
+        await GiveTempStartWeaponAsync(enemy, resources);
 
         Debug.Log($"[InGameManager] 임시 적 생성. pos={TempEnemyPosition}", enemy);
     }
