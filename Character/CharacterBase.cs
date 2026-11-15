@@ -11,6 +11,7 @@ namespace SHIN
 
         private const string TopLayerName = "Top";
         private const string WalkSeAddress = "Assets/Addressable/Sound/SE/Walk/se_walk_001.ogg";
+        private const string DieSeAddress = "Assets/Addressable/Sound/SE/Character/se_character_die_001.wav";
         private const float WalkStepDistance = 2f;
 
         private static readonly int MoveXHash = Animator.StringToHash("MoveX");
@@ -157,6 +158,7 @@ namespace SHIN
             ChangeState(CharacterStateId.Die);
             if (_animator != null)
                 _animator.CrossFade(DieHash, 0.1f);
+            PlayDeathSe();
             PlayEnemyDeathDissolve();
         }
 
@@ -304,6 +306,12 @@ namespace SHIN
             _walkStepTimer = speed > 0.01f ? WalkStepDistance / speed : WalkStepDistance;
             var sound = GameManager.Instance != null ? GameManager.Instance.SoundManager : null;
             sound?.Play(SoundType.Se, WalkSeAddress);
+        }
+
+        private void PlayDeathSe()
+        {
+            var sound = GameManager.Instance != null ? GameManager.Instance.SoundManager : null;
+            sound?.Play(SoundType.Se, DieSeAddress);
         }
 
         /// <summary>

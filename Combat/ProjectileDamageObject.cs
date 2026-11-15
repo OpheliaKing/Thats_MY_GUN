@@ -11,6 +11,7 @@ public class ProjectileDamageObject : DamageObject
     public const string UnitLayerName = "Unit";
     public const string WallLayerName = "Wall";
     public const string ObstacleLayerName = "Obstacle";
+    private const string HitSeAddress = "Assets/Addressable/Sound/SE/Gun/se_gun_hit_001.ogg";
 
     private static int _hitMask = int.MinValue;
 
@@ -142,6 +143,7 @@ public class ProjectileDamageObject : DamageObject
 
     private async void SpawnHitEffect(Vector3 point, Vector3 normal)
     {
+        PlayHitSe();
         var address = _hitEffectAddress;
         var pool = _pool;
         if (pool == null || string.IsNullOrEmpty(address))
@@ -154,6 +156,12 @@ public class ProjectileDamageObject : DamageObject
         var rotation = normal.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(normal) : Quaternion.identity;
         effect.transform.SetPositionAndRotation(point, rotation);
         effect.SetActive(true);
+    }
+
+    private void PlayHitSe()
+    {
+        var sound = GameManager.Instance != null ? GameManager.Instance.SoundManager : null;
+        sound?.Play(SoundType.Se, HitSeAddress);
     }
 
     private void DestroySelf()
