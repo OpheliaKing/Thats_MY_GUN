@@ -114,6 +114,8 @@ public class InGameManager : ManagerBase
     {
         _projectilePool?.Clear();
         _projectilePool = null;
+        if (GameManager.Instance != null)
+            GameManager.Instance.UIManager.CloseAll();
         resources?.ReleaseScope(RaidScope);
     }
 
