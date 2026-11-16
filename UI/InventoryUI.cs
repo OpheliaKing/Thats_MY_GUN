@@ -15,14 +15,18 @@ public class InventoryUI : MonoBehaviour
     static readonly Color EquippedSlot = new Color(0.28f, 0.24f, 0.16f, 1f);
     static readonly Color LabelColor = new Color(0.93f, 0.91f, 0.86f, 1f);
 
+    const string IconAddressPrefix = "Assets/Addressable/Art/UI/Icon/Weapon/";
+
     readonly List<ItemInfo> _items = new();
     readonly List<Transform> _slots = new();
+    readonly List<string> _iconAddresses = new();
     bool _closeHooked;
 
     public event Action CloseRequested;
 
     public void Bind(CharacterBase player)
     {
+        ReleaseIcons();
         HookCloseButton();
         CollectSlots();
         _items.Clear();
@@ -103,9 +107,13 @@ public class InventoryUI : MonoBehaviour
             image.color = item == null ? EmptySlot : equipped ? EquippedSlot : FilledSlot;
 
         var label = GetOrCreateLabel(slot);
+        var icon = GetOrCreateIcon(slot, "SlotIcon", 58f);
         label.gameObject.SetActive(item != null);
-        if (item != null)
-            label.text = item.Tid;
+        if (item == null)
+            return;
+
+        label.text = item.Tid;
+        LoadIcon(icon, label, item.Tid);
     }
 
     TextMeshProUGUI GetOrCreateLabel(Transform slot)
@@ -169,6 +177,10 @@ public class InventoryUI : MonoBehaviour
         var icon = FindDeep(transform, "ItemIcon");
         if (icon != null)
             icon.gameObject.SetActive(false);
+
+        var placeholder = FindDeep(transform, "WeaponSlot")?.Find("Icon");
+        if (placeholder != null)
+            placeholder.gameObject.SetActive(false);
     }
 
     void FillLoadout(CharacterBase player, ItemInfo equipped)
@@ -183,6 +195,88 @@ public class InventoryUI : MonoBehaviour
         SetText("Name", name);
         SetText("Ammo", ammo);
         SetText("Equipped", equipped != null ? "장착 중" : "");
+
+        var weaponSlot = FindDeep(transform, "WeaponSlot");
+        if (weaponSlot == null)
+            return;
+
+        var icon = GetOrCreateIcon(weaponSlot, "WeaponIcon", 64f);
+        if (equipped != null)
+            LoadIcon(icon, null, equipped.Tid);
+    }
+
+    Image GetOrCreateIcon(Transform parent, string childName, float size)
+    {
+        var existing = parent.Find(childName);
+        RectTransform rect;
+        Image image;
+        if (existing != null)
+        {
+            rect = existing as RectTransform;
+            image = existing.GetComponent<Image>();
+        }
+        else
+        {
+            var iconObject = new GameObject(childName, typeof(RectTransform));
+            iconObject.transform.SetParent(parent, false);
+            rect = iconObject.GetComponent<RectTransform>();
+            image = iconObject.AddComponent<Image>();
+        }
+
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(size, size);
+        rect.anchoredPosition = Vector2.zero;
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+        image.sprite = null;
+        image.enabled = false;
+        return image;
+    }
+
+    async void LoadIcon(Image image, TextMeshProUGUI label, string tid)
+    {
+        var resources = GameManager.Instance != null ? GameManager.Instance.ResourceManager : null;
+        if (resources == null || image == null || string.IsNullOrEmpty(tid))
+            return;
+
+        var address = IconAddressPrefix + tid + ".png";
+        var sprite = await resources.LoadAsync<Sprite>(address);
+        if (this == null || image == null)
+        {
+            resources.Release(address);
+            return;
+        }
+
+        if (sprite == null)
+            return;
+
+        _iconAddresses.Add(address);
+        image.sprite = sprite;
+        image.color = Color.white;
+        image.enabled = true;
+        if (label != null)
+            label.gameObject.SetActive(false);
+    }
+
+    void ReleaseIcons()
+    {
+        var resources = GameManager.Instance != null ? GameManager.Instance.ResourceManager : null;
+        if (resources == null)
+        {
+            _iconAddresses.Clear();
+            return;
+        }
+
+        for (var i = 0; i < _iconAddresses.Count; i++)
+            resources.Release(_iconAddresses[i]);
+
+        _iconAddresses.Clear();
+    }
+
+    void OnDestroy()
+    {
+        ReleaseIcons();
     }
 
     void SetText(string objectName, string value)

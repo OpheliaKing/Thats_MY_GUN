@@ -7,6 +7,8 @@ using UnityEngine;
 /// </summary>
 public class WeaponObject : MonoBehaviour
 {
+    const string DryFireSeAddress = "Assets/Addressable/Sound/SE/Gun/se_gun_dryfire_001.wav";
+
     [SerializeField] private Transform _bulletSpawnPoint;
     [SerializeField] private Transform _fireEffectPoint;
     [SerializeField] private string _fireEffectAddress;
@@ -157,11 +159,12 @@ public class WeaponObject : MonoBehaviour
     }
 
     /// <summary>
-    /// 탄이 없을 때의 가상 발사. 나중에는 총알 없이 찰칵 소리만 낸다.
+    /// 탄이 없을 때의 발사. 총알은 나가지 않고 찰칵 소리만 낸다.
     /// </summary>
     private void DryFire()
     {
-        Debug.Log($"[WeaponObject] 가상 발사. 탄약 없음. 발사하지 않음. 남은 탄약={_info.Ammo}/{MaxMagazine}", this);
+        var sound = GameManager.Instance != null ? GameManager.Instance.SoundManager : null;
+        sound?.Play(SoundType.Se, DryFireSeAddress);
     }
 
     private int MaxMagazine => _info.Data != null ? _info.Data.MaxMagazine : 0;
