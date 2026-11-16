@@ -1,6 +1,8 @@
 using System.Threading.Tasks;
 using SHIN;
+using Unity.AI.Navigation;
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
 /// 한 판의 시작, 중단, 맵 로드를 담당한다.
@@ -81,6 +83,8 @@ public class InGameManager : ManagerBase
             Debug.LogError($"[InGameManager] 맵 생성 실패. tid={tid}");
             return;
         }
+
+        BuildMapNavMesh(instance);
 
         // ===== 플레이어 스폰 위치 =====
         // 지금은 원점. 나중에 맵의 스폰 지점으로 교체한다.
@@ -269,6 +273,17 @@ public class InGameManager : ManagerBase
             playerCamera = camera.gameObject.AddComponent<PlayerCamera>();
 
         return playerCamera;
+    }
+
+    private static void BuildMapNavMesh(GameObject map)
+    {
+        var surface = map.GetComponent<NavMeshSurface>();
+        if (surface == null)
+            surface = map.AddComponent<NavMeshSurface>();
+
+        surface.collectObjects = CollectObjects.Children;
+        surface.useGeometry = NavMeshCollectGeometry.RenderMeshes;
+        surface.BuildNavMesh();
     }
 
     private async Task<MapSO> GetMapsAsync(ResourceManager resources)

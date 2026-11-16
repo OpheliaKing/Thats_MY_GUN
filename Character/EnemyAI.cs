@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace SHIN
 {
@@ -7,13 +8,31 @@ namespace SHIN
     /// </summary>
     public class EnemyAI : MonoBehaviour
     {
+        const int SpotJumpCount = 2;
         const float ViewRange = 7f;
         const float ViewAngle = 43f;
         const float FireRange = 9f;
         const float FireAngle = 25f;
+        const float EyeHeight = 0.9f;
+
+        static int _sightMask = int.MinValue;
+
+        static int SightMask
+        {
+            get
+            {
+                if (_sightMask == int.MinValue)
+                    _sightMask = LayerMask.GetMask(
+                        ProjectileDamageObject.WallLayerName,
+                        ProjectileDamageObject.ObstacleLayerName);
+
+                return _sightMask;
+            }
+        }
 
         CharacterBase _self;
         CharacterBase _target;
+        NavMeshAgent _agent;
         AiBehavior _behavior = AiBehavior.Idle;
 
         public AiBehavior Behavior => _behavior;
@@ -61,13 +80,19 @@ namespace SHIN
                 case AiBehavior.Patrol:
                     TickPatrol();
                     break;
+                case AiBehavior.Alert:
+                    TickAlert();
+                    break;
                 case AiBehavior.Combat:
                     TickCombat();
                     break;
                 case AiBehavior.Idle:
                     TickIdle();
                     if (CanSeeTarget())
-                        SetBehavior(AiBehavior.Combat);
+                    {
+                        SetBehavior(AiBehavior.Alert);
+                        _self.PlaySpotJump(SpotJumpCount);
+                    }
                     break;
                 default:
                     TickIdle();
@@ -114,6 +139,26 @@ namespace SHIN
             _self.CharacterRotateToLook(_target.transform.position);
         }
 
+        void TickAlert()
+        {
+            if (!HasLivingTarget())
+            {
+                _self.StopSpotJump();
+                StopIntent();
+                SetBehavior(AiBehavior.Idle);
+                return;
+            }
+
+            _self.SetMoveDirection(Vector3.zero);
+            _self.SetFireHeld(false);
+            _self.CharacterRotateToLook(_target.transform.position);
+            if (_self.IsSpotJumping)
+                return;
+
+            SetBehavior(AiBehavior.Combat);
+            TickCombat();
+        }
+
         void TickCombat()
         {
             if (!HasLivingTarget() || !IsHostile(_self.CharacterType, _target.CharacterType))
@@ -124,14 +169,71 @@ namespace SHIN
 
             var toTarget = _target.transform.position - _self.transform.position;
             toTarget.y = 0f;
+            if (toTarget.magnitude > FireRange)
+            {
+                var direction = FollowDirection();
+                _self.SetMoveDirection(direction);
+                _self.SetFireHeld(false);
+                if (direction.sqrMagnitude > 0.0001f)
+                    _self.CharacterRotateToLook(_self.transform.position + direction);
+                return;
+            }
+
+            StopFollow();
             _self.SetMoveDirection(Vector3.zero);
             _self.CharacterRotateToLook(_target.transform.position);
 
             var facing = toTarget.sqrMagnitude < 0.0001f
                 ? 0f
                 : Vector3.Angle(_self.transform.forward, toTarget);
-            var fire = toTarget.magnitude <= FireRange && facing <= FireAngle;
+            var fire = facing <= FireAngle;
             _self.SetFireHeld(fire);
+        }
+
+        Vector3 FollowDirection()
+        {
+            var agent = EnsureAgent();
+            if (agent == null)
+                return Vector3.zero;
+
+            agent.nextPosition = _self.transform.position;
+            agent.SetDestination(_target.transform.position);
+            var velocity = agent.desiredVelocity;
+            velocity.y = 0f;
+            return velocity;
+        }
+
+        NavMeshAgent EnsureAgent()
+        {
+            if (_agent == null)
+            {
+                _agent = _self.GetComponent<NavMeshAgent>();
+                if (_agent == null)
+                    _agent = _self.gameObject.AddComponent<NavMeshAgent>();
+
+                _agent.updatePosition = false;
+                _agent.updateRotation = false;
+                _agent.autoBraking = false;
+                _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
+                _agent.radius = 0.5f;
+                _agent.height = 2f;
+            }
+
+            if (!_agent.isOnNavMesh && NavMesh.SamplePosition(_self.transform.position, out var hit, 2f, NavMesh.AllAreas))
+            {
+                _agent.Warp(hit.position);
+                var body = _self.GetComponent<Rigidbody>();
+                if (body != null)
+                    body.position = _self.transform.position;
+            }
+
+            return _agent.isOnNavMesh ? _agent : null;
+        }
+
+        void StopFollow()
+        {
+            if (_agent != null && _agent.isOnNavMesh && _agent.hasPath)
+                _agent.ResetPath();
         }
 
         bool CanSeeTarget()
@@ -139,7 +241,9 @@ namespace SHIN
             if (!HasLivingTarget() || !IsHostile(_self.CharacterType, _target.CharacterType))
                 return false;
 
-            var toTarget = _target.transform.position - _self.transform.position;
+            var origin = _self.transform.position + Vector3.up * EyeHeight;
+            var aim = _target.transform.position + Vector3.up * EyeHeight;
+            var toTarget = aim - origin;
             toTarget.y = 0f;
             if (toTarget.sqrMagnitude > ViewRange * ViewRange)
                 return false;
@@ -147,7 +251,15 @@ namespace SHIN
             if (toTarget.sqrMagnitude < 0.0001f)
                 return true;
 
-            return Vector3.Angle(_self.transform.forward, toTarget) <= ViewAngle;
+            if (Vector3.Angle(_self.transform.forward, toTarget) > ViewAngle)
+                return false;
+
+            var offset = aim - origin;
+            var distance = offset.magnitude;
+            if (distance <= 0.0001f)
+                return true;
+
+            return !Physics.Raycast(origin, offset / distance, distance, SightMask, QueryTriggerInteraction.Ignore);
         }
 
         bool HasLivingTarget()
@@ -168,6 +280,7 @@ namespace SHIN
 
         void StopIntent()
         {
+            StopFollow();
             _self.SetMoveDirection(Vector3.zero);
             _self.SetFireHeld(false);
         }

@@ -155,6 +155,7 @@ namespace SHIN
         private void OnDied()
         {
             SetFireHeld(false);
+            StopSpotJump();
             StopMoveVelocity();
             ChangeState(CharacterStateId.Die);
             if (_animator != null)
@@ -169,6 +170,7 @@ namespace SHIN
             ApplyMoveBlend();
             ApplyShootLayer();
             UpdateHitLayer();
+            UpdateSpotJump();
             PlayWalkStep();
         }
 

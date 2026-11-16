@@ -4,6 +4,7 @@ namespace SHIN
     {
         Idle,
         Patrol,
+        Alert,
         Combat,
         Follow
     }
