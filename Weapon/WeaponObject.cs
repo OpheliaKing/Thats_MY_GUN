@@ -8,6 +8,22 @@ using UnityEngine;
 public class WeaponObject : MonoBehaviour
 {
     const string DryFireSeAddress = "Assets/Addressable/Sound/SE/Gun/se_gun_dryfire_001.wav";
+    const float GunshotHearRange = 12f;
+    const float GunshotGizmoTime = 0.35f;
+
+    static int _hearMask = int.MinValue;
+    static readonly Collider[] HearHits = new Collider[16];
+
+    static int HearMask
+    {
+        get
+        {
+            if (_hearMask == int.MinValue)
+                _hearMask = LayerMask.GetMask(ProjectileDamageObject.UnitLayerName);
+
+            return _hearMask;
+        }
+    }
 
     [SerializeField] private Transform _bulletSpawnPoint;
     [SerializeField] private Transform _fireEffectPoint;
@@ -19,6 +35,8 @@ public class WeaponObject : MonoBehaviour
     private WeaponInfo _info;
     private Transform _owner;
     private ProjectilePool _pool;
+    private Vector3 _gunshotGizmoOrigin;
+    private float _gunshotGizmoUntil;
 
     public Transform BulletSpawnPoint => _bulletSpawnPoint != null ? _bulletSpawnPoint : transform;
     public Transform FireEffectPoint => _fireEffectPoint != null ? _fireEffectPoint : transform;
@@ -74,6 +92,32 @@ public class WeaponObject : MonoBehaviour
         SpawnFireEffect();
         PlayFireSe();
         ShakeCamera();
+        NotifyGunshot();
+    }
+
+    /// <summary>
+    /// 총알이 나간 자리에 총성을 들려 준다. 반응은 몬스터가 정한다.
+    /// </summary>
+    private void NotifyGunshot()
+    {
+        var origin = BulletSpawnPoint.position;
+        _gunshotGizmoOrigin = origin;
+        _gunshotGizmoUntil = Time.time + GunshotGizmoTime;
+        var count = Physics.OverlapSphereNonAlloc(origin, GunshotHearRange, HearHits, HearMask, QueryTriggerInteraction.Ignore);
+        var shooter = _owner != null ? _owner.GetComponent<CharacterBase>() : null;
+        for (var i = 0; i < count; i++)
+        {
+            var hit = HearHits[i];
+            HearHits[i] = null;
+            if (hit == null)
+                continue;
+
+            var ai = hit.GetComponentInParent<EnemyAI>();
+            if (ai == null)
+                continue;
+
+            ai.HearGunshot(origin, shooter);
+        }
     }
 
     private void PlayFireSe()
@@ -168,4 +212,13 @@ public class WeaponObject : MonoBehaviour
     }
 
     private int MaxMagazine => _info.Data != null ? _info.Data.MaxMagazine : 0;
+
+    private void OnDrawGizmos()
+    {
+        if (!Application.isPlaying || Time.time > _gunshotGizmoUntil)
+            return;
+
+        Gizmos.color = new Color(0.35f, 0.85f, 1f, 1f);
+        Gizmos.DrawWireSphere(_gunshotGizmoOrigin, GunshotHearRange);
+    }
 }

@@ -40,6 +40,7 @@ namespace SHIN
         Vector3 _lastSeenPosition;
         bool _hasLastSeen;
         bool _missJumpPlayed;
+        bool _gunshotJump;
 
         public AiBehavior Behavior => _behavior;
 
@@ -52,6 +53,50 @@ namespace SHIN
         public void SetBehavior(AiBehavior behavior)
         {
             _behavior = behavior;
+        }
+
+        /// <summary>
+        /// 총성 위치를 듣는다. 보이는 채로 싸우는 중이면 무시하고, 아니면 그 지점을 수색한다.
+        /// </summary>
+        public void HearGunshot(Vector3 shotPosition, CharacterBase shooter)
+        {
+            if (_self == null || _self.Info == null || _self.Info.IsDead)
+                return;
+
+            if (shooter == null || shooter == _self || !IsHostile(_self.CharacterType, shooter.CharacterType))
+                return;
+
+            if (_behavior == AiBehavior.Alert)
+                return;
+
+            if (_behavior == AiBehavior.Combat && HasCombatSight())
+                return;
+
+            if (_behavior == AiBehavior.Search && _gunshotJump)
+            {
+                _lastSeenPosition = shotPosition;
+                _hasLastSeen = true;
+                return;
+            }
+
+            _lastSeenPosition = shotPosition;
+            _hasLastSeen = true;
+            _lostSightTimer = 0f;
+            var surprise = _behavior == AiBehavior.Idle || _behavior == AiBehavior.Patrol || _behavior == AiBehavior.Follow;
+            _missJumpPlayed = false;
+            if (surprise)
+            {
+                _gunshotJump = true;
+                _self.CharacterRotateToLook(shotPosition);
+                _self.PlaySpotJump(1);
+            }
+            else
+            {
+                _gunshotJump = false;
+                _self.StopSpotJump();
+            }
+
+            SetBehavior(AiBehavior.Search);
         }
 
         void LateUpdate()
@@ -222,6 +267,20 @@ namespace SHIN
                 return;
             }
 
+            if (_gunshotJump)
+            {
+                _self.SetFireHeld(false);
+                StopFollow();
+                _self.SetMoveDirection(Vector3.zero);
+                if (_hasLastSeen)
+                    _self.CharacterRotateToLook(_lastSeenPosition);
+
+                if (_self.IsSpotJumping)
+                    return;
+
+                _gunshotJump = false;
+            }
+
             if (HasCombatSight())
             {
                 _lostSightTimer = 0f;
@@ -371,6 +430,7 @@ namespace SHIN
 
         void StopIntent()
         {
+            _gunshotJump = false;
             StopFollow();
             _self.SetMoveDirection(Vector3.zero);
             _self.SetFireHeld(false);
