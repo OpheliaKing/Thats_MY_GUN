@@ -6,6 +6,7 @@ namespace SHIN
         Patrol,
         Alert,
         Combat,
+        Search,
         Follow
     }
 }

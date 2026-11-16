@@ -24,7 +24,12 @@ namespace SHIN
 
         public void StopSpotJump()
         {
+            if (!_spotJumping)
+                return;
+
             _spotJumping = false;
+            if (_animator != null && _stateMachine.CurrentId != CharacterStateId.Die)
+                _animator.CrossFade(IdleHash, 0.1f, 0, 0f);
         }
 
         void UpdateSpotJump()

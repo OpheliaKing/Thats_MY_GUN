@@ -14,9 +14,7 @@ public class InGameManager : ManagerBase
     private const string CharacterCatalogAddress = "Assets/Addressable/SO/CharacterData.asset";
     private const string WeaponCatalogAddress = "Assets/Addressable/SO/WeaponSO.asset";
     private const string PlayerTid = "char_player_001";
-    private const string TempStartWeaponTid = "weapon_assault_rifle_001";
     private const string InventoryAddress = "Assets/Addressable/Prafab/UI/InGame/InventoryUI.prefab";
-    private static readonly Vector3 TempEnemyPosition = new Vector3(2f, 0f, 0f);
 
     private MapSO _maps;
     private CharacterDataSO _characters;
@@ -107,9 +105,8 @@ public class InGameManager : ManagerBase
         }
 
         player.InitCharacter(CharacterType.Player, playerData);
-        await GiveTempStartWeaponAsync(player, resources);
         player.SetAppearance(CharacterPreset.Default);
-        await SpawnTempEnemyAsync(resources, playerData, player);
+        await ApplyTempStartAsync(resources, playerData, player);
         BindPlayerCamera(player);
         BindPlayerInput(player);
         MapTid = tid;
@@ -314,80 +311,82 @@ public class InGameManager : ManagerBase
     }
 
     /// <summary>
-    /// 임시. 인게임 시작 시 (2, 0, 0)에 적을 한 명 만든다. 적 데이터가 없어서 플레이어 프리팹을 쓴다.
+    /// 임시. 시작 무기, 탄알, 적 한 명. 이 함수만 지우면 임시 배치가 사라진다.
     /// </summary>
-    private async Task SpawnTempEnemyAsync(ResourceManager resources, CharacterData data, CharacterBase player)
+    private async Task ApplyTempStartAsync(ResourceManager resources, CharacterData playerData, CharacterBase player)
     {
-        if (resources == null || data == null || string.IsNullOrEmpty(data.PrefabAddress))
+        const string TempWeaponTid = "weapon_assault_rifle_001";
+        const string TempAmmoTid = "ammo_rifle_001";
+        const int TempAmmoCount = 60;
+        var tempEnemyPosition = new Vector3(2f, 0f, 0f);
+
+        await GiveTempWeaponAsync(player);
+        await GiveTempAmmoAsync(player);
+        await SpawnTempEnemyAsync();
+
+        async Task GiveTempWeaponAsync(CharacterBase character)
         {
-            Debug.LogError("[InGameManager] 임시 적을 만들 데이터가 없습니다.");
-            return;
+            if (character == null || character.Info == null)
+                return;
+
+            var weapons = await GetWeaponsAsync(resources);
+            var item = new ItemInfo(TempWeaponTid, ItemType.Weapon);
+            if (weapons == null || !weapons.TryGetByTid(item.Tid, out var weaponData))
+            {
+                Debug.LogError($"[InGameManager] 임시 무기를 찾지 못했습니다. tid={TempWeaponTid}");
+                return;
+            }
+
+            await character.AcquireItem(item, resources, _projectilePool, weaponData);
         }
 
-        var enemyObject = await resources.InstantiateAsync(data.PrefabAddress, startInactive: false, worldPosition: TempEnemyPosition);
-        if (enemyObject == null)
+        async Task GiveTempAmmoAsync(CharacterBase character)
         {
-            Debug.LogError("[InGameManager] 임시 적 생성 실패.");
-            return;
+            if (character == null || character.Info == null)
+                return;
+
+            var ammo = new ItemInfo(TempAmmoTid, ItemType.Ammo, TempAmmoCount);
+            await character.AcquireItem(ammo, resources, _projectilePool);
         }
 
-        var enemy = enemyObject.GetComponent<CharacterBase>();
-        if (enemy == null)
+        async Task SpawnTempEnemyAsync()
         {
-            Debug.LogError("[InGameManager] 임시 적에 CharacterBase가 없습니다.");
-            return;
-        }
+            if (resources == null || playerData == null || string.IsNullOrEmpty(playerData.PrefabAddress))
+            {
+                Debug.LogError("[InGameManager] 임시 적을 만들 데이터가 없습니다.");
+                return;
+            }
 
-        enemy.InitCharacter(CharacterType.Enemy, data);
-        enemy.SetAppearance(CharacterPreset.Cowboy);
-        enemy.transform.SetPositionAndRotation(TempEnemyPosition, Quaternion.identity);
-        var body = enemy.GetComponent<Rigidbody>();
-        if (body != null)
-        {
-            body.position = TempEnemyPosition;
-            body.rotation = Quaternion.identity;
-            body.linearVelocity = Vector3.zero;
-            body.angularVelocity = Vector3.zero;
-        }
+            var enemyObject = await resources.InstantiateAsync(playerData.PrefabAddress, startInactive: false, worldPosition: tempEnemyPosition);
+            if (enemyObject == null)
+            {
+                Debug.LogError("[InGameManager] 임시 적 생성 실패.");
+                return;
+            }
 
-        var ai = enemy.gameObject.AddComponent<EnemyAI>();
-        ai.Bind(enemy, player);
-        await GiveTempStartWeaponAsync(enemy, resources);
+            var enemy = enemyObject.GetComponent<CharacterBase>();
+            if (enemy == null)
+            {
+                Debug.LogError("[InGameManager] 임시 적에 CharacterBase가 없습니다.");
+                return;
+            }
 
-        Debug.Log($"[InGameManager] 임시 적 생성. pos={TempEnemyPosition}", enemy);
-    }
+            enemy.InitCharacter(CharacterType.Enemy, playerData);
+            enemy.SetAppearance(CharacterPreset.Cowboy);
+            enemy.transform.SetPositionAndRotation(tempEnemyPosition, Quaternion.identity);
+            var body = enemy.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.position = tempEnemyPosition;
+                body.rotation = Quaternion.identity;
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
 
-    /// <summary>
-    /// 임시. 캐릭터를 처음 만들 때 돌격소총을 쥐여 준다.
-    /// </summary>
-    private async Task GiveTempStartWeaponAsync(CharacterBase player, ResourceManager resources)
-    {
-        if (player == null || player.Info == null)
-            return;
-
-        var weapons = await GetWeaponsAsync(resources);
-        var item = new ItemInfo(TempStartWeaponTid, ItemType.Weapon);
-        if (!TryGetItemData(weapons, item, out var weaponData))
-        {
-            Debug.LogError($"[InGameManager] 임시 무기를 찾지 못했습니다. tid={TempStartWeaponTid}");
-            return;
-        }
-
-        await player.AcquireItem(item, resources, _projectilePool, weaponData);
-    }
-
-    private static bool TryGetItemData(WeaponSO weapons, ItemInfo item, out WeaponData weaponData)
-    {
-        weaponData = null;
-        if (item == null)
-            return false;
-
-        switch (item.Type)
-        {
-            case ItemType.Weapon:
-                return weapons != null && weapons.TryGetByTid(item.Tid, out weaponData);
-            default:
-                return false;
+            var ai = enemy.gameObject.AddComponent<EnemyAI>();
+            ai.Bind(enemy, player);
+            await GiveTempWeaponAsync(enemy);
+            Debug.Log($"[InGameManager] 임시 적 생성. pos={tempEnemyPosition}", enemy);
         }
     }
 }

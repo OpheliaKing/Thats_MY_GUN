@@ -3,18 +3,26 @@
 /// </summary>
 public class ItemInfo
 {
-    public ItemInfo(string tid, ItemType type)
+    public ItemInfo(string tid, ItemType type, int count = 1)
     {
         Tid = tid;
         Type = type;
+        SetCount(count);
     }
 
     public string Tid { get; }
     public ItemType Type { get; }
+    public int Count { get; private set; }
+
+    public void SetCount(int count)
+    {
+        Count = count > 0 ? count : 0;
+    }
 }
 
 public enum ItemType
 {
     None,
-    Weapon
+    Weapon,
+    Ammo
 }

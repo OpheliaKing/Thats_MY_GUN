@@ -5,7 +5,7 @@ namespace SHIN
 {
     public partial class CharacterBase
     {
-        public async Task AcquireItem(ItemInfo item, ResourceManager resources, ProjectilePool projectilePool, WeaponData weaponData = null)
+        public async Task AcquireItem(ItemInfo item, ResourceManager resources, ProjectilePool projectilePool, WeaponData weaponData = null, ItemData itemData = null)
         {
             if (_info == null)
             {
@@ -25,9 +25,11 @@ namespace SHIN
             if (item.Type == ItemType.Weapon && weaponData != null)
                 _projectilePool?.Ensure(weaponData.ProjectileAddress);
 
-            var replaced = _info.ContainsItem(item.Tid);
-            _info.AddItem(item);
-            Debug.Log($"[CharacterBase] 아이템 획득. tid={item.Tid}, type={item.Type}, 인벤토리={_info.ItemCount}, {(replaced ? "같은 Tid를 덮어씀" : "새로 넣음")}", this);
+            var replaced = item.Type != ItemType.Ammo && _info.ContainsItem(item.Tid);
+            var count = item.Count;
+            var maxCount = item.Type == ItemType.Ammo && itemData != null ? itemData.MaxCount : 0;
+            _info.AddItem(item, maxCount);
+            Debug.Log($"[CharacterBase] 아이템 획득. tid={item.Tid}, type={item.Type}, 수량={count}, 인벤토리={_info.ItemCount}, {(replaced ? "같은 Tid를 덮어씀" : "새로 넣음")}", this);
 
             if (_info.EquippedItem != null)
             {

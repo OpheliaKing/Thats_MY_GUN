@@ -68,6 +68,9 @@ namespace SHIN
                 return;
 
             _isFireHeld = held;
+            if (_reloading)
+                return;
+
             _equippedWeaponView?.SetFireSignal(held);
         }
 

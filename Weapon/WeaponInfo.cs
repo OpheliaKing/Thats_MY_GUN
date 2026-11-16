@@ -51,6 +51,16 @@ public class WeaponInfo
         Ammo--;
         return WeaponFireResult.Fired;
     }
+
+    public void AddAmmo(int amount)
+    {
+        if (amount <= 0 || Data == null)
+            return;
+
+        var loaded = Ammo + amount;
+        var max = Data.MaxMagazine;
+        Ammo = loaded > max ? max : loaded;
+    }
 }
 
 public enum WeaponFireResult

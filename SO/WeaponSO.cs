@@ -33,6 +33,7 @@ public class WeaponData
     [SerializeField] private float _bulletSpeed = 40f;
     [SerializeField] private float _fireRate = 5f;
     [SerializeField] private float _damage = 10f;
+    [SerializeField] private string _ammoTid;
 
     public string PrefabAddress => _prefabAddress;
     public string ProjectileAddress => _projectileAddress;
@@ -40,4 +41,5 @@ public class WeaponData
     public float BulletSpeed => _bulletSpeed;
     public float FireRate => _fireRate;
     public float Damage => _damage;
+    public string AmmoTid => _ammoTid;
 }

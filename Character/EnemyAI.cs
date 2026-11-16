@@ -14,6 +14,8 @@ namespace SHIN
         const float FireRange = 9f;
         const float FireAngle = 25f;
         const float EyeHeight = 0.9f;
+        const float LoseSightTime = 2f;
+        const float SearchArriveDistance = 0.75f;
 
         static int _sightMask = int.MinValue;
 
@@ -34,6 +36,10 @@ namespace SHIN
         CharacterBase _target;
         NavMeshAgent _agent;
         AiBehavior _behavior = AiBehavior.Idle;
+        float _lostSightTimer;
+        Vector3 _lastSeenPosition;
+        bool _hasLastSeen;
+        bool _missJumpPlayed;
 
         public AiBehavior Behavior => _behavior;
 
@@ -86,6 +92,9 @@ namespace SHIN
                 case AiBehavior.Combat:
                     TickCombat();
                     break;
+                case AiBehavior.Search:
+                    TickSearch();
+                    break;
                 case AiBehavior.Idle:
                     TickIdle();
                     if (CanSeeTarget())
@@ -109,6 +118,9 @@ namespace SHIN
                     break;
                 case AiBehavior.Combat:
                     TickCombat();
+                    break;
+                case AiBehavior.Search:
+                    TickSearch();
                     break;
                 default:
                     TickIdle();
@@ -167,37 +179,106 @@ namespace SHIN
                 return;
             }
 
-            var toTarget = _target.transform.position - _self.transform.position;
-            toTarget.y = 0f;
-            if (toTarget.magnitude > FireRange)
+            if (HasCombatSight())
             {
-                var direction = FollowDirection();
-                _self.SetMoveDirection(direction);
-                _self.SetFireHeld(false);
-                if (direction.sqrMagnitude > 0.0001f)
-                    _self.CharacterRotateToLook(_self.transform.position + direction);
+                _lostSightTimer = 0f;
+                _lastSeenPosition = _target.transform.position;
+                _hasLastSeen = true;
+                StopFollow();
+                _self.SetMoveDirection(Vector3.zero);
+                _self.CharacterRotateToLook(_target.transform.position);
+
+                var toTarget = _target.transform.position - _self.transform.position;
+                toTarget.y = 0f;
+                var facing = toTarget.sqrMagnitude < 0.0001f
+                    ? 0f
+                    : Vector3.Angle(_self.transform.forward, toTarget);
+                _self.SetFireHeld(toTarget.magnitude <= FireRange && facing <= FireAngle);
                 return;
             }
 
-            StopFollow();
-            _self.SetMoveDirection(Vector3.zero);
-            _self.CharacterRotateToLook(_target.transform.position);
+            _self.SetFireHeld(false);
+            _lostSightTimer += Time.deltaTime;
+            if (_lostSightTimer >= LoseSightTime)
+            {
+                _missJumpPlayed = false;
+                SetBehavior(AiBehavior.Search);
+                TickSearch();
+                return;
+            }
 
-            var facing = toTarget.sqrMagnitude < 0.0001f
-                ? 0f
-                : Vector3.Angle(_self.transform.forward, toTarget);
-            var fire = facing <= FireAngle;
-            _self.SetFireHeld(fire);
+            var direction = FollowDirection(_target.transform.position);
+            _self.SetMoveDirection(direction);
+            if (direction.sqrMagnitude > 0.0001f)
+                _self.CharacterRotateToLook(_self.transform.position + direction);
         }
 
-        Vector3 FollowDirection()
+        void TickSearch()
+        {
+            if (!HasLivingTarget() || !IsHostile(_self.CharacterType, _target.CharacterType))
+            {
+                StopIntent();
+                SetBehavior(AiBehavior.Idle);
+                return;
+            }
+
+            if (HasCombatSight())
+            {
+                _lostSightTimer = 0f;
+                _lastSeenPosition = _target.transform.position;
+                _hasLastSeen = true;
+                _missJumpPlayed = false;
+                _self.StopSpotJump();
+                SetBehavior(AiBehavior.Combat);
+                TickCombat();
+                return;
+            }
+
+            _self.SetFireHeld(false);
+            if (!_hasLastSeen)
+            {
+                StopIntent();
+                SetBehavior(AiBehavior.Idle);
+                return;
+            }
+
+            var toLastSeen = _lastSeenPosition - _self.transform.position;
+            toLastSeen.y = 0f;
+            if (toLastSeen.sqrMagnitude <= SearchArriveDistance * SearchArriveDistance)
+            {
+                if (!_missJumpPlayed)
+                {
+                    _missJumpPlayed = true;
+                    StopFollow();
+                    _self.SetMoveDirection(Vector3.zero);
+                    _self.SetFireHeld(false);
+                    _self.PlaySpotJump(1);
+                    return;
+                }
+
+                if (_self.IsSpotJumping)
+                    return;
+
+                _missJumpPlayed = false;
+                StopIntent();
+                SetBehavior(AiBehavior.Idle);
+                return;
+            }
+
+            var direction = FollowDirection(_lastSeenPosition);
+            _self.SetMoveDirection(direction);
+            if (direction.sqrMagnitude > 0.0001f)
+                _self.CharacterRotateToLook(_self.transform.position + direction);
+        }
+
+        Vector3 FollowDirection(Vector3 destination)
         {
             var agent = EnsureAgent();
             if (agent == null)
                 return Vector3.zero;
 
             agent.nextPosition = _self.transform.position;
-            agent.SetDestination(_target.transform.position);
+            agent.SetDestination(destination);
             var velocity = agent.desiredVelocity;
             velocity.y = 0f;
             return velocity;
@@ -238,6 +319,19 @@ namespace SHIN
 
         bool CanSeeTarget()
         {
+            if (!HasCombatSight())
+                return false;
+
+            var toTarget = _target.transform.position - _self.transform.position;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude < 0.0001f)
+                return true;
+
+            return Vector3.Angle(_self.transform.forward, toTarget) <= ViewAngle;
+        }
+
+        bool HasCombatSight()
+        {
             if (!HasLivingTarget() || !IsHostile(_self.CharacterType, _target.CharacterType))
                 return false;
 
@@ -250,9 +344,6 @@ namespace SHIN
 
             if (toTarget.sqrMagnitude < 0.0001f)
                 return true;
-
-            if (Vector3.Angle(_self.transform.forward, toTarget) > ViewAngle)
-                return false;
 
             var offset = aim - origin;
             var distance = offset.magnitude;

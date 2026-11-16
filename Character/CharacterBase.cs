@@ -18,6 +18,9 @@ namespace SHIN
         private static readonly int MoveYHash = Animator.StringToHash("MoveY");
         private static readonly int MoveAmountHash = Animator.StringToHash("MoveAmount");
         private static readonly int DieHash = Animator.StringToHash("Die");
+        private static readonly int ShootHash = Animator.StringToHash("Shoot");
+        private static readonly int ReloadHash = Animator.StringToHash("Reload");
+        private static readonly int NoneHash = Animator.StringToHash("none");
 
         private readonly CharacterStateMachine _stateMachine = new CharacterStateMachine();
 
@@ -31,6 +34,7 @@ namespace SHIN
         private bool _hasMoveInput;
         private InputManager _input;
         private int _topLayerIndex = -1;
+        private TopPose _topPose = TopPose.None;
         private float _walkStepTimer;
 
         private void Reset()
@@ -155,6 +159,7 @@ namespace SHIN
         private void OnDied()
         {
             SetFireHeld(false);
+            CancelReload();
             StopSpotJump();
             StopMoveVelocity();
             ChangeState(CharacterStateId.Die);
@@ -168,7 +173,7 @@ namespace SHIN
         {
             _stateMachine.Update();
             ApplyMoveBlend();
-            ApplyShootLayer();
+            ApplyTopLayer();
             UpdateHitLayer();
             UpdateSpotJump();
             PlayWalkStep();
@@ -197,6 +202,7 @@ namespace SHIN
             _input = input;
             _input.MoveChanged += OnMoveInput;
             BindFireInput();
+            BindReloadInput();
             OnMoveInput(_input.Move);
         }
 
@@ -207,6 +213,7 @@ namespace SHIN
 
             _input.MoveChanged -= OnMoveInput;
             UnbindFireInput();
+            UnbindReloadInput();
             _input = null;
             _hasMoveInput = false;
             _moveInput = Vector2.zero;
@@ -258,26 +265,37 @@ namespace SHIN
 
         /// <summary>
         /// 이동 입력을 캐릭터의 오른쪽(MoveX), 앞(MoveY)으로 넣어 블렌드한다.
+        /// 플레이어는 스틱, 그 외에는 이동 방향을 쓴다.
         /// </summary>
         private void ApplyMoveBlend()
         {
             if (_animator == null)
                 return;
 
-            var move = _hasMoveInput ? _moveInput : Vector2.zero;
-            if (move.sqrMagnitude > 1f)
-                move.Normalize();
+            Vector3 world;
+            if (_hasMoveInput)
+            {
+                var move = _moveInput;
+                if (move.sqrMagnitude > 1f)
+                    move.Normalize();
+                world = ToCameraPlanarVector(move);
+            }
+            else
+            {
+                world = _moveDirection;
+            }
 
-            var local = transform.InverseTransformDirection(ToCameraPlanarVector(move));
+            var local = transform.InverseTransformDirection(world);
             _animator.SetFloat(MoveXHash, local.x);
             _animator.SetFloat(MoveYHash, local.z);
             _animator.SetFloat(MoveAmountHash, new Vector2(local.x, local.z).magnitude);
         }
 
         /// <summary>
-        /// 사격 중에는 상체 레이어만 켜서 하체 이동은 그대로 둔다.
+        /// 상체 레이어는 기본이 비어 있다. 사격과 장전일 때만 클립을 바꾸고 웨이트를 올린다.
+        /// 하체 이동은 베이스 레이어에 그대로 둔다.
         /// </summary>
-        private void ApplyShootLayer()
+        private void ApplyTopLayer()
         {
             if (_animator == null)
                 return;
@@ -289,8 +307,48 @@ namespace SHIN
                     return;
             }
 
-            var shooting = _isFireHeld && _stateMachine.CurrentId != CharacterStateId.Die;
-            _animator.SetLayerWeight(_topLayerIndex, shooting ? 1f : 0f);
+            if (_stateMachine.CurrentId == CharacterStateId.Die)
+            {
+                _reloading = false;
+                SetTopPose(TopPose.None);
+                _animator.SetLayerWeight(_topLayerIndex, 0f);
+                return;
+            }
+
+            if (_reloading)
+            {
+                SetTopPose(TopPose.Reload);
+                _animator.SetLayerWeight(_topLayerIndex, 1f);
+                if (!IsReloadClipDone())
+                    return;
+
+                FinishReload();
+            }
+
+            if (_isFireHeld)
+            {
+                SetTopPose(TopPose.Shoot);
+                _animator.SetLayerWeight(_topLayerIndex, 1f);
+                return;
+            }
+
+            SetTopPose(TopPose.None);
+            _animator.SetLayerWeight(_topLayerIndex, 0f);
+        }
+
+        private void SetTopPose(TopPose pose)
+        {
+            if (_topPose == pose)
+                return;
+
+            _topPose = pose;
+            var hash = pose switch
+            {
+                TopPose.Shoot => ShootHash,
+                TopPose.Reload => ReloadHash,
+                _ => NoneHash
+            };
+            _animator.CrossFade(hash, 0.05f, _topLayerIndex, 0f);
         }
 
         private void PlayWalkStep()

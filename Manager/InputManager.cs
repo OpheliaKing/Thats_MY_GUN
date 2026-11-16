@@ -29,6 +29,7 @@ public class InputManager : ManagerBase
     private InputAction _uiCancel;
     private InputAction _playerInventory;
     private InputAction _uiInventory;
+    private InputAction _reload;
 
     public Map CurrentMap { get; private set; } = Map.Player;
 
@@ -51,6 +52,7 @@ public class InputManager : ManagerBase
     public event Action UIRightClickStarted;
     public event Action UICancelStarted;
     public event Action InventoryPerformed;
+    public event Action ReloadPerformed;
 
     private void Awake()
     {
@@ -101,6 +103,7 @@ public class InputManager : ManagerBase
         _uiCancel = _uiMap.FindAction("Cancel", true);
         _playerInventory = _playerMap.FindAction("Inventory", true);
         _uiInventory = _uiMap.FindAction("Inventory", true);
+        _reload = _playerMap.FindAction("Reload", true);
         _bound = true;
 
         if (isActiveAndEnabled)
@@ -133,6 +136,7 @@ public class InputManager : ManagerBase
         _uiCancel.started += OnUICancelStarted;
         _playerInventory.started += OnInventoryStarted;
         _uiInventory.started += OnInventoryStarted;
+        _reload.started += OnReloadStarted;
 
         EnableMap(CurrentMap);
     }
@@ -163,6 +167,7 @@ public class InputManager : ManagerBase
         _uiCancel.started -= OnUICancelStarted;
         _playerInventory.started -= OnInventoryStarted;
         _uiInventory.started -= OnInventoryStarted;
+        _reload.started -= OnReloadStarted;
 
         _playerMap.Disable();
         _uiMap.Disable();
@@ -265,5 +270,10 @@ public class InputManager : ManagerBase
     private void OnInventoryStarted(InputAction.CallbackContext context)
     {
         InventoryPerformed?.Invoke();
+    }
+
+    private void OnReloadStarted(InputAction.CallbackContext context)
+    {
+        ReloadPerformed?.Invoke();
     }
 }
